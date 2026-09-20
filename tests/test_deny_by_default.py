@@ -1,5 +1,7 @@
 """Every route must require a session unless it is on this allowlist."""
 
+import re
+
 from fastapi.routing import APIRoute
 
 from grocery.security.deps import is_public
@@ -20,7 +22,7 @@ def _api_routes(app):
 
 
 def _concrete(path: str) -> str:
-    return path.replace("{session_id}", "1")
+    return re.sub(r"\{[^}]+\}", "1", path)
 
 
 def test_public_endpoints_are_exactly_the_allowlist(client):
@@ -44,7 +46,7 @@ def test_protected_routes_reject_anonymous_requests(client):
             expected = 303 if method == "GET" else 401
             assert resp.status_code == expected, f"{method} {route.path} -> {resp.status_code}"
             checked += 1
-    assert checked >= 4
+    assert checked >= 15
 
 
 def test_anonymous_api_style_get_is_401_not_a_redirect(client):

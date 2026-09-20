@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from "receipts/_line.html" import line_row %}
+{% block title %}Receipt - Grocery Agent{% endblock %}
+{% block content %}
+<p><a href="/receipts">&larr; Receipts</a></p>
+<h1>
+  {{ receipt.store.name if receipt.store else "Receipt" }}
+  <span class="badge status-{{ receipt.status }}">{{ labels[receipt.status] }}</span>
+</h1>
+
+{% if receipt.status == "extracting" %}
+  <noscript><meta http-equiv="refresh" content="5"></noscript>
+  <p class="card" data-poll-url="/receipts/{{ receipt.id }}/status" data-poll-status="extracting" role="status">
+    Reading your receipt. This usually takes 10 to 30 seconds; the page updates by itself.
+  </p>
+  <script src="{{ static_url('js/poll.js') }}" defer></script>
+
+{% elif receipt.status == "failed" %}
+  <p class="alert" role="alert">{{ receipt.error or "The receipt could not be read." }}</p>
+  <form method="post" action="/receipts/{{ receipt.id }}/retry" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn primary">Try again</button>
+  </form>
+
+{% elif receipt.status == "confirmed" and not editing %}
+  <p class="muted">
+    {{ receipt.purchased_on.isoformat() if receipt.purchased_on }} &middot; total EUR {{ fmt(receipt.total_cents) }}
+    {% if receipt.source == "manual" %}&middot; added by hand{% endif %}
+  </p>
+  {% if receipt.flags %}
+    {% for f in flags %}<p class="alert">{{ f }}</p>{% endfor %}
+  {% endif %}
+  <ul class="list">
+    {% for l in receipt.lines %}
+    <li class="card">
+      <strong>{{ l.product.name if l.product else l.raw_text }}</strong>
+      <div class="muted">{{ l.raw_text }}{% if l.kind != "item" %} &middot; {{ l.kind }}{% endif %}</div>
+      <div>EUR {{ fmt(l.line_total_cents) }}
+        {% if l.unit == "kg" and l.unit_price_cents %}<span class="muted">({{ l.quantity_milli / 1000 }} kg at EUR {{ fmt(l.unit_price_cents) }}/kg)</span>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  <nav class="stack spaced">
+    {% if receipt.source != "manual" %}<a class="btn" href="/receipts/{{ receipt.id }}?edit=1">Edit</a>{% endif %}
+    <form method="post" action="/receipts/{{ receipt.id }}/delete" class="stack" data-confirm="Delete this receipt?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn danger">Delete receipt</button>
+    </form>
+  </nav>
+
+{% else %}
+  {% for e in errors %}<p class="alert" role="alert">{{ e }}</p>{% endfor %}
+  {% for f in flags %}<p class="alert">{{ f }}</p>{% endfor %}
+  {% if notes %}<p class="card"><strong>Note from the reader:</strong> {{ notes }}</p>{% endif %}
+
+  {% if page_count and receipt.files and receipt.files[0].file.path %}
+  <details class="card" open>
+    <summary>Receipt photo{{ "s" if page_count > 1 }}</summary>
+    {% for rf in receipt.files if rf.file.path %}
+      <img class="receipt-img" src="/receipts/{{ receipt.id }}/image/{{ rf.page_no }}" alt="Receipt page {{ rf.page_no }}">
+    {% endfor %}
+  </details>
+  {% endif %}
+
+  <form method="post" action="/receipts/{{ receipt.id }}/confirm" class="stack" id="review-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="line_count" id="line-count" value="{{ rows|length }}">
+
+    <label for="store">Store</label>
+    <select id="store" name="store">
+      {% for s in stores %}
+      <option value="{{ s.chain }}" {{ "selected" if s.chain == (form_values.store if form_values else selected_store) }}>{{ s.name }}</option>
+      {% endfor %}
+    </select>
+
+    <label for="purchased_on">Date</label>
+    <input id="purchased_on" name="purchased_on" type="date"
+           value="{{ form_values.purchased_on if form_values else (receipt.purchased_on.isoformat() if receipt.purchased_on else '') }}">
+
+    <label for="total">Receipt total (EUR)</label>
+    <input id="total" name="total" type="text" inputmode="decimal"
+           value="{{ form_values.total if form_values else fmt(receipt.total_cents) }}">
+
+    <h2>Lines</h2>
+    <div id="lines" class="stack">
+      {% for row in rows %}{{ line_row(row, categories) }}{% endfor %}
+    </div>
+    <button type="button" class="btn" id="add-line">Add a line</button>
+
+    <div class="delta" id="delta" role="status" aria-live="polite">
+      <span>Lines <strong id="delta-sum">-</strong></span>
+      <span>Total <strong id="delta-total">-</strong></span>
+      <span>Difference <strong id="delta-diff">-</strong></span>
+    </div>
+
+    <label class="check">
+      <input type="checkbox" name="accept_mismatch" {{ "checked" if form_values and form_values.accept }}>
+      Save even if the lines do not add up to the total
+    </label>
+    <button type="submit" class="btn primary">Save receipt</button>
+  </form>
+
+  <datalist id="products">
+    {% for name in product_names %}<option value="{{ name }}">{% endfor %}
+  </datalist>
+  <template id="line-template">{{ line_row(blank, categories) }}</template>
+  <script src="{{ static_url('js/review.js') }}" defer></script>
+
+  <form method="post" action="/receipts/{{ receipt.id }}/delete" class="stack spaced" data-confirm="Delete this receipt?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn danger">Discard receipt</button>
+  </form>
+{% endif %}
+{% endblock %}

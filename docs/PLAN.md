@@ -1,6 +1,6 @@
 # Grocery Agent: plan
 
-Status: approved 2026-09-20 with the decisions below. Phase 0 built.
+Status: approved 2026-09-20 with the decisions below. Phases 0 and 1 built (2026-09-20).
 
 ## Goals
 
@@ -29,13 +29,14 @@ Single user, iPhone, English UI. Everything stays on the own server except calls
 
 ```
 iPhone / PC on tailnet --HTTPS--> Tailscale Serve (host) --> 127.0.0.1:8090
-   -> [app: FastAPI + Jinja2 + HTMX]  -> [db: Postgres 18, internal network only]
-   -> [worker (from phase 1): jobs, price sources, image cleanup]
+   -> [app: FastAPI + Jinja2]  -> [db: Postgres 18, internal network only]
+   -> [worker: Claude API calls, jobs, image cleanup; later price sources]
 egress only: api.anthropic.com, world.openfoodfacts.org, folder/price sources
 ```
 
 - Sync SQLAlchemy 2.0 + psycopg3, Alembic, Pydantic v2, uv, pytest. Postgres job table (`SKIP LOCKED`), no Redis.
-- Frontend: server-rendered Jinja2 + HTMX, vendored ES modules for scanner / outbox / review grid, no build step.
+- Frontend: server-rendered Jinja2 with small hand-written scripts (no HTMX, no build step): photo shrinking, review grid,
+  status polling; later scanner and outbox. Vendored libraries only.
   Strict CSP, no npm supply chain. Camera and service worker need HTTPS, which Serve provides.
 - iPhone specifics: BarcodeDetector is not available in iOS Safari, so scanning uses a vendored ZXing (wasm) fallback
   (verify in phase 2). Background Sync does not exist on iOS: the offline outbox flushes on app open,
@@ -85,15 +86,16 @@ inventory_items, jobs
 
 Receipt validation: line math (qty x unit = total, +-1 cent), sum of items + discounts + deposit + rounding equals the
 receipt total exactly, flags for date and duplicates; delta shown live in the review screen.
-Normalisation: exact `name_mappings` hit auto-applies, `pg_trgm` fuzzy match is a one-tap suggestion, otherwise a new
-product proposed from the same extraction call. Every correction raises `confirmed_count`.
+Normalisation: exact `name_mappings` hit auto-applies, a fuzzy match (rapidfuzz, in Python so it also runs on SQLite in
+tests) is a suggestion to check, otherwise a new product is proposed from the same extraction call. Every correction
+raises `confirmed_count`.
 
 ## Phases
 
 | Phase | Result | Effort (days) |
 |---|---|---|
-| **0 Foundations** (done) | Compose stack, login, sessions, CSRF, headers, deny-by-default, migrations, backup script, README | 1.5-2 |
-| **1 Receipts** | Upload (multi-photo), extraction job, review/edit, validation, learned names, manual quick-add (bakery, Turkish supermarket per-kg), token/cost log, image retention job | 4-5 |
+| **0 Foundations** (built) | Compose stack, login, sessions, CSRF, headers, deny-by-default, migrations, backup script, README | 1.5-2 |
+| **1 Receipts** (built, first real receipts pending) | Upload (multi-photo), extraction job, review/edit, validation, learned names, manual quick-add (bakery, Turkish supermarket per-kg), token/cost log, image retention job | 4-5 |
 | **2 In-store** | Barcode scan (ZXing), shelf photo, confirm, OFF cache, "usual vs now" feedback, large-button UI, offline outbox, service worker | 4-5 |
 | **3 Analysis** | Top products, per category and store, monthly view vs EUR 400, trend, charts | 2 |
 | **4 Cupboard** | Scan to add stock, linked to last price and store | 1-1.5 |
@@ -127,3 +129,14 @@ where SQL can decide, per-task model setting. To be measured from the logged tok
   what arrived). The Origin check uses the browser-supplied Origin either way.
 - iOS Safari BarcodeDetector availability and ZXing performance (phase 2).
 - Anthropic API data-retention terms for receipt images (check before the first real upload).
+
+## Phase 1 as built (deviations from the plan)
+
+- Fuzzy matching uses rapidfuzz in Python instead of `pg_trgm`; quantities are stored as integer thousandths
+  (`quantity_milli`) to avoid decimals; `receipt_lines.suggested_name` keeps the model's proposed product name.
+- The model is called with `messages.create` and a JSON schema (`transform_schema`), and validated with Pydantic in our
+  code, so the raw output is kept even when it does not validate. Prompt: `src/grocery/llm/prompts/receipt_v1.md`.
+- Digital PDF receipts with a text layer are sent as text (no images); scans and photos as images.
+- Only the worker container talks to the Claude API; the app container never does.
+- Not yet exercised against the real API: the prompt and the request shape are covered by tests with a stub client only.
+  Expect one round of prompt tuning after the first real receipts (the raw output is in `extractions.raw_json`).

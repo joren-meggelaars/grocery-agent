@@ -6,8 +6,10 @@ from fastapi.staticfiles import StaticFiles
 
 from grocery.config import Settings, get_settings
 from grocery.db.session import make_engine, make_session_factory
+from grocery.security.bodylimit import BodyLimitMiddleware
 from grocery.security.deps import csrf_protect, require_auth
 from grocery.security.middleware import install_security_middleware
+from grocery.receipts import routes as receipt_routes
 from grocery.web import routes_auth, routes_home
 from grocery.web.templating import STATIC_DIR
 
@@ -40,7 +42,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.session_factory = make_session_factory(engine)
 
     install_security_middleware(app)
+    app.add_middleware(BodyLimitMiddleware, max_bytes=settings.max_request_bytes)  # outermost
     app.include_router(routes_home.router)
     app.include_router(routes_auth.router)
+    app.include_router(receipt_routes.router)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

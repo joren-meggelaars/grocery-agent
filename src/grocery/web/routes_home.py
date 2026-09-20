@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from grocery.llm.budget import budget_state
 from grocery.security.deps import Principal, current_principal, get_db, public
 from grocery.web.templating import templates
 
@@ -20,9 +21,17 @@ def healthz(db: Session = Depends(get_db)):
 
 
 @router.get("/", response_class=HTMLResponse)
-def home(request: Request, principal: Principal = Depends(current_principal)):
+def home(
+    request: Request,
+    principal: Principal = Depends(current_principal),
+    db: Session = Depends(get_db),
+):
     return templates.TemplateResponse(
         request,
         "home.html",
-        {"user": principal.user, "csrf_token": principal.csrf_token},
+        {
+            "user": principal.user,
+            "csrf_token": principal.csrf_token,
+            "budget": budget_state(db, request.app.state.settings),
+        },
     )

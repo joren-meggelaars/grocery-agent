@@ -4,8 +4,10 @@ Self-hosted grocery spending tracker: receipts to structured data, shelf-price c
 monthly overview, and deal alerts from weekly folders. Runs on SRV-DOC-01 next to TrendWatcher and
 Clothing Advisor. **Not exposed publicly**: the only way in is Tailscale Serve.
 
-Status: **Phase 0 (foundations)**: login, sessions, CSRF, security headers, deny-by-default routing, Postgres,
-migrations, backups. Receipts arrive in Phase 1. The full plan is in [docs/PLAN.md](docs/PLAN.md).
+Status: **Phase 0** (foundations: login, sessions, CSRF, security headers, deny-by-default routing, Postgres,
+migrations, backups) and **Phase 1** (receipts: upload, reading with Claude, review and correct, validation,
+learned product names, quick add for the bakery and the Turkish supermarket). The full plan is in
+[docs/PLAN.md](docs/PLAN.md).
 
 ## Deploy on SRV-DOC-01
 
@@ -35,12 +37,14 @@ nano .env
 | `TS_IDENTITY_MODE` | `require` (default): password **and** a matching Tailscale login. `sso`: Tailscale login alone. `off`. |
 | `TS_ALLOWED_LOGINS` | Tailscale login(s) allowed in. |
 | `TS_TRUSTED_PROXY_IPS` | Only this peer may supply the identity header. Keep `172.30.90.1/32` (the `web` network gateway in `docker-compose.yml`). |
+| `ANTHROPIC_API_KEY` | Key for reading receipts. Create a dedicated one in the Anthropic Console with a monthly limit of about EUR 5. Without it receipts fail with a message saying so. |
+| `LLM_MONTHLY_BUDGET_EUR` | New receipts are not read once the estimated spend this month reaches this (banner at 80%). Default 5. |
 
 ```bash
 # 3. Start (builds the image, runs migrations, serves on 127.0.0.1:8090 only)
-docker compose up -d --build
+docker compose up -d --build       # app + worker + db
 docker compose ps
-docker compose logs -f app          # Ctrl+C to leave
+docker compose logs -f app worker    # Ctrl+C to leave
 
 # 4. Create your login (asks for the password twice; minimum 12 characters)
 docker compose run --rm app python -m grocery.cli create-user joren --tailscale-login you@example.com
@@ -82,6 +86,25 @@ ss -ltnp | grep 8090
 curl -m 3 http://10.0.100.8:8090/healthz
 ```
 
+## Using it (Phase 1)
+
+- **Add receipt:** upload one or more photos (top to bottom for a long receipt) or one PDF. Photos are shrunk in the
+  browser first. The worker reads the receipt (10 to 30 seconds), then the page shows the review screen.
+- **Review:** check store, date, total and every line. The bar at the bottom shows lines against total live; a
+  difference means a line was misread or missed. Type or pick the product name per line: what you confirm is
+  remembered per store, so the same receipt text is recognised next time. Save.
+- **Bakery / Turkish supermarket:** the quick-add buttons. For weighed goods enter weight and price per kg (the price is
+  prefilled from your last entry, first time EUR 8.49/kg).
+- **Photos are deleted 7 days after you save a receipt** (30 days if it is never saved). Extracted text, your
+  corrections and the raw model output stay in the database.
+- **Cost:** every reading logs its tokens and an estimated cost (`extractions` table); the home page shows this
+  month's total.
+
+```bash
+# what did the last readings cost?
+docker compose exec db psql -U grocery -d grocery   -c "select id, model, input_tokens, output_tokens, round(cost_est_eur::numeric, 4) as eur, parsed_ok, error from extractions order by id desc limit 10;"
+```
+
 ## Operations
 
 ```bash
@@ -119,6 +142,9 @@ Copy dumps off the VM now and then; a backup that lives only on the same disk is
 | `Invalid host header` | The name in the URL is not in `ALLOWED_HOSTS`. The log line `rejected Host header` shows what arrived. |
 | Everything is `403 Forbidden` | Identity gate. Look for `tailscale identity rejected` / `ignoring Tailscale-User-Login header from untrusted peer X` in the logs: fix `TS_TRUSTED_PROXY_IPS` or `TS_ALLOWED_LOGINS`. Temporary escape hatch: `TS_IDENTITY_MODE=off`. |
 | `Cross-origin request rejected` | The Origin check refused a POST. The log line `rejected cross-origin` shows the Origin and Sec-Fetch-Site that arrived; the Origin host must be in `ALLOWED_HOSTS`. |
+| Receipt says `ANTHROPIC_API_KEY is not set` | Add the key to `.env`, run `docker compose up -d`, open the receipt and press *Try again*. |
+| Receipt stays on *Reading...* | The worker is not running or cannot reach the API: `docker compose logs --tail 50 worker`. |
+| `Monthly API budget reached` | Raise `LLM_MONTHLY_BUDGET_EUR` in `.env`, `docker compose up -d`, then *Try again*. |
 | `Too many attempts` | Login lockout (5 failures, then 1 to 15 minutes). Wait, or run the `unlock` command above. |
 | Compose says a `$` variable is unset | A `$` in a `.env` value. Keep secrets alphanumeric. |
 
@@ -126,7 +152,7 @@ Copy dumps off the VM now and then; a backup that lives only on the same disk is
 
 ```bash
 uv sync
-uv run pytest                                                   # 73 tests, SQLite, no Docker needed
+uv run pytest                                                   # 219 tests, SQLite, no Docker or API key needed
 DATABASE_URL=sqlite:///./dev.db COOKIE_SECURE=false uv run alembic upgrade head
 DATABASE_URL=sqlite:///./dev.db COOKIE_SECURE=false uv run uvicorn --factory grocery.main:create_app --port 8000
 ```

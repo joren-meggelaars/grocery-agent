@@ -2,15 +2,17 @@
 {% block content %}
 <h1>Grocery Agent</h1>
 <p class="muted">Signed in as {{ user.username }}.</p>
-<section class="card">
-  <h2>Status</h2>
-  <p>Foundations are running: login, sessions and the security baseline. Receipts arrive in phase 1.</p>
-</section>
+{% include "receipts/_budget.html" %}
 <nav class="stack">
+  <a class="btn primary" href="/receipts/new">Add receipt</a>
+  <a class="btn" href="/receipts">Receipts</a>
+  <a class="btn" href="/receipts/quick?store=bakery">Bakery</a>
+  <a class="btn" href="/receipts/quick?store=turkish">Turkish supermarket</a>
   <a class="btn" href="/account">Account and sessions</a>
   <form method="post" action="/logout" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button type="submit" class="btn">Sign out</button>
   </form>
 </nav>
+<p class="muted">API spend this month: EUR {{ "%.2f"|format(budget.spent) }} of {{ "%.2f"|format(budget.cap) }} (estimate).</p>
 {% endblock %}

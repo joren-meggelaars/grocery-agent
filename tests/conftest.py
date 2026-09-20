@@ -5,6 +5,7 @@ from grocery.cli import create_user
 from grocery.config import Settings
 from grocery.db.base import Base
 from grocery.main import create_app
+from grocery.refdata import seed
 
 PASSWORD = "correct horse battery staple"
 PEER = ("172.30.90.1", 50000)  # the docker bridge gateway: what Tailscale Serve looks like
@@ -15,6 +16,7 @@ def make_settings(tmp_path):
     def _make(**overrides) -> Settings:
         values = dict(
             database_url=f"sqlite:///{tmp_path / 'test.db'}",
+            files_dir=tmp_path / "files",
             allowed_hosts=["testserver"],
             cookie_secure=True,
             ts_identity_mode="off",
@@ -33,6 +35,7 @@ def make_app(make_settings):
         app = create_app(make_settings(**overrides))
         Base.metadata.create_all(app.state.engine)
         with app.state.session_factory() as db:
+            seed(db)
             create_user(db, "joren", PASSWORD, tailscale_login="joren@example.com")
         return app
 

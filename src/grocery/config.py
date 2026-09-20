@@ -1,8 +1,9 @@
 from functools import lru_cache
 from ipaddress import IPv4Network, IPv6Network, ip_network
+from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -29,6 +30,22 @@ class Settings(BaseSettings):
     session_absolute_days: int = 90
 
     log_level: str = "INFO"
+
+    # --- Claude API (receipts, later shelf labels) ---
+    anthropic_api_key: SecretStr | None = None
+    llm_model: str = "claude-sonnet-5"
+    llm_effort: Literal["low", "medium", "high"] = "medium"
+    # Hard stop for new extractions; estimates come from logged token usage.
+    llm_monthly_budget_eur: float = 5.0
+    usd_to_eur: float = 0.92
+
+    # --- Uploads and transient image storage ---
+    files_dir: Path = Path("./data/files")
+    max_upload_bytes: int = 15 * 1024 * 1024  # per file
+    max_request_bytes: int = 40 * 1024 * 1024  # whole request
+    max_photos: int = 6
+    confirmed_retention_days: int = 7
+    unconfirmed_retention_days: int = 30
 
     @field_validator("allowed_hosts", "ts_allowed_logins", "ts_trusted_proxy_ips", mode="before")
     @classmethod

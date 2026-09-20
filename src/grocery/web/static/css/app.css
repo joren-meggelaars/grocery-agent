@@ -104,3 +104,56 @@ input[type="text"], input[type="password"] {
   background: var(--accent);
   border-radius: 999px;
 }
+
+/* --- receipts --- */
+select {
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+}
+input[type="date"], input[type="file"] {
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+}
+label { display: block; }
+label input, label select { margin-top: 4px; }
+.check { display: flex; gap: 10px; align-items: center; font-weight: 600; }
+.check input { width: 28px; height: 28px; margin: 0; flex: none; }
+.spaced { margin-top: 16px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 10px; }
+.line { display: flex; flex-direction: column; gap: 10px; }
+.line.flagged { border-color: var(--danger-fg); }
+.line.deleted { opacity: 0.4; }
+.warn { margin: 0; font-weight: 600; color: var(--danger-fg); }
+.row-link { display: flex; justify-content: space-between; gap: 10px; text-decoration: none; color: var(--fg); }
+.receipt-img { display: block; width: 100%; height: auto; margin-top: 10px; border-radius: 8px; }
+.delta {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+}
+.delta.good { border-color: #1a7f37; }
+.delta.bad { border-color: var(--danger-fg); background: var(--danger-bg); color: var(--danger-fg); }
+.btn.danger { color: var(--danger-fg); border-color: var(--danger-fg); }
+.status-needs_review { background: #b26a00; color: #fff; }
+.status-failed { background: var(--danger-fg); color: var(--danger-bg); }
+.status-confirmed { background: #1a7f37; color: #fff; }
+.status-extracting { background: var(--muted); color: var(--bg); }

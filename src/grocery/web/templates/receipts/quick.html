@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Quick add - Grocery Agent{% endblock %}
+{% block content %}
+<p><a href="/receipts">&larr; Receipts</a></p>
+<h1>Quick add</h1>
+<p class="muted">For purchases without a receipt photo, such as the bakery or a weighed purchase at the Turkish supermarket.</p>
+{% for e in errors %}<p class="alert" role="alert">{{ e }}</p>{% endfor %}
+<form method="post" action="/receipts/quick" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label for="store">Store</label>
+  <select id="store" name="store">
+    {% for s in stores %}<option value="{{ s.chain }}" {{ "selected" if s.chain == values.store }}>{{ s.name }}</option>{% endfor %}
+  </select>
+  <label for="purchased_on">Date</label>
+  <input id="purchased_on" name="purchased_on" type="date" value="{{ values.date }}" required>
+  <label for="description">What (optional)</label>
+  <input id="description" name="description" type="text" value="{{ values.description }}"
+         placeholder="{{ 'Kip' if values.store == 'turkish' else 'Brood' if values.store == 'bakery' else 'Groceries' }}">
+  <label for="total">Amount paid (EUR)</label>
+  <input id="total" name="total" type="text" inputmode="decimal" value="{{ values.total }}" placeholder="3.95">
+  <p class="muted">Or for weighed goods, leave the amount empty and fill in weight and price per kg:</p>
+  <label for="weight">Weight (kg)</label>
+  <input id="weight" name="weight" type="text" inputmode="decimal" value="{{ values.weight }}" placeholder="0.874">
+  <label for="price_per_kg">Price per kg (EUR)</label>
+  <input id="price_per_kg" name="price_per_kg" type="text" inputmode="decimal" value="{{ values.price_per_kg }}">
+  <button type="submit" class="btn primary">Save</button>
+</form>
+{% endblock %}

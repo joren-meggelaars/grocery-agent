@@ -1,5 +1,32 @@
 name: grocery
 
+x-app-env: &app-env
+  DATABASE_URL: postgresql+psycopg://grocery:${POSTGRES_PASSWORD}@db:5432/grocery
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:?set ALLOWED_HOSTS in .env}
+  TS_IDENTITY_MODE: ${TS_IDENTITY_MODE:-require}
+  TS_ALLOWED_LOGINS: ${TS_ALLOWED_LOGINS:-}
+  TS_TRUSTED_PROXY_IPS: ${TS_TRUSTED_PROXY_IPS:-172.30.90.1/32}
+  COOKIE_SECURE: ${COOKIE_SECURE:-true}
+  SESSION_IDLE_DAYS: ${SESSION_IDLE_DAYS:-30}
+  SESSION_ABSOLUTE_DAYS: ${SESSION_ABSOLUTE_DAYS:-90}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-claude-sonnet-5}
+  LLM_EFFORT: ${LLM_EFFORT:-medium}
+  LLM_MONTHLY_BUDGET_EUR: ${LLM_MONTHLY_BUDGET_EUR:-5}
+  FILES_DIR: /data/files
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs: ["/tmp"]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  pids_limit: 200
+
+x-logging: &logging
+  driver: json-file
+  options: {max-size: "10m", max-file: "3"}
+
 services:
   db:
     image: postgres:18
@@ -18,36 +45,39 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    logging: &logging
-      driver: json-file
-      options: {max-size: "10m", max-file: "3"}
+    logging: *logging
 
   app:
     build: .
     restart: unless-stopped
     depends_on:
       db: {condition: service_healthy}
-    environment:
-      DATABASE_URL: postgresql+psycopg://grocery:${POSTGRES_PASSWORD}@db:5432/grocery
-      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?set ALLOWED_HOSTS in .env}
-      TS_IDENTITY_MODE: ${TS_IDENTITY_MODE:-require}
-      TS_ALLOWED_LOGINS: ${TS_ALLOWED_LOGINS:-}
-      TS_TRUSTED_PROXY_IPS: ${TS_TRUSTED_PROXY_IPS:-172.30.90.1/32}
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      SESSION_IDLE_DAYS: ${SESSION_IDLE_DAYS:-30}
-      SESSION_ABSOLUTE_DAYS: ${SESSION_ABSOLUTE_DAYS:-90}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    environment: *app-env
     ports:
       # Loopback only: `tailscale serve` on the host is the only way in.
       # 8090 avoids TrendWatcher (:8000) and Clothing Advisor (:8080) on the same VM.
       - "127.0.0.1:8090:8000"
+    volumes:
+      - files:/data
     networks: [web, backend]
-    read_only: true
-    tmpfs: ["/tmp"]
-    cap_drop: [ALL]
-    security_opt: ["no-new-privileges:true"]
+    <<: *hardening
+    mem_limit: 1g               # decoding large photos and rendering PDFs needs headroom
+    logging: *logging
+
+  # Reads receipts through the Claude API and deletes expired photos. It is the only
+  # container that talks to the Claude API, and it publishes no port.
+  worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "grocery.jobs.worker"]
+    depends_on:
+      app: {condition: service_healthy}   # the app container runs the migrations on start
+    environment: *app-env
+    volumes:
+      - files:/data
+    networks: [egress, backend]
+    <<: *hardening
     mem_limit: 512m
-    pids_limit: 200
     logging: *logging
 
 networks:
@@ -61,6 +91,8 @@ networks:
           gateway: 172.30.90.1
   backend:
     internal: true
+  egress: {}
 
 volumes:
   pgdata:
+  files:

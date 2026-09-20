@@ -32,3 +32,19 @@ def test_migrations_match_the_models_and_are_reversible(tmp_path):
     command.downgrade(cfg, "base")
     tables = set(inspect(create_engine(url)).get_table_names())
     assert tables <= {"alembic_version"}
+
+
+def test_migration_seeds_match_the_reference_data(tmp_path):
+    from sqlalchemy import text
+
+    from grocery import refdata
+
+    url = f"sqlite:///{tmp_path / 's.db'}"
+    command.upgrade(_config(url), "head")
+    with create_engine(url).connect() as conn:
+        stores = conn.execute(text("select chain, name, role from stores order by id")).all()
+        cats = conn.execute(text("select name, counts_as_food from categories order by sort_order")).all()
+        price = conn.execute(text("select value from settings where key = :k"), {"k": refdata.TURKISH_PRICE_KEY}).scalar()
+    assert [tuple(r) for r in stores] == refdata.STORES
+    assert [(n, bool(f)) for n, f in cats] == refdata.CATEGORIES
+    assert price == "849"

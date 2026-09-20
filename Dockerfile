@@ -10,7 +10,8 @@ COPY src ./src
 RUN uv sync --frozen --no-dev
 
 FROM python:3.13-slim
-RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin app
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin app \
+ && mkdir -p /data/files && chown -R app:app /data && chmod 700 /data/files
 WORKDIR /app
 COPY --from=build /app /app
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1

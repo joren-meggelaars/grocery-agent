@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Add receipt - Grocery Agent{% endblock %}
+{% block content %}
+<p><a href="/receipts">&larr; Receipts</a></p>
+<h1>Add receipt</h1>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="/receipts/new" enctype="multipart/form-data" class="stack" data-resize-form>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label for="photos">Photo(s) of the receipt, or one PDF</label>
+  <p class="muted">For a long receipt, select several photos in order (top to bottom).</p>
+  <input id="photos" name="photos" type="file" multiple required
+         accept="image/jpeg,image/png,image/webp,application/pdf">
+  <button type="submit" class="btn primary">Upload and read</button>
+</form>
+<script src="{{ static_url('js/upload.js') }}" defer></script>
+{% endblock %}

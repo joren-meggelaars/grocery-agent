@@ -1,0 +1,47 @@
+{% macro line_row(row, categories) %}
+<div class="line card{{ ' flagged' if row.flags }}" data-line>
+  <input type="hidden" name="l{{ row.i }}_orig" value="{{ row.orig }}">
+  <label>Receipt text
+    <input type="text" name="l{{ row.i }}_raw" value="{{ row.raw }}" maxlength="255">
+  </label>
+  <div class="grid2">
+    <label>Type
+      <select name="l{{ row.i }}_kind">
+        {% for k in ["item", "discount", "deposit", "bag", "rounding"] %}
+        <option value="{{ k }}" {{ "selected" if k == row.kind }}>{{ k }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Line total (EUR)
+      <input type="text" class="js-total" inputmode="decimal" name="l{{ row.i }}_total" value="{{ row.total }}">
+    </label>
+  </div>
+  <div class="grid3">
+    <label>Quantity
+      <input type="text" inputmode="decimal" name="l{{ row.i }}_qty" value="{{ row.qty }}">
+    </label>
+    <label>Unit
+      <select name="l{{ row.i }}_unit">
+        {% for u in ["pcs", "kg", "l"] %}<option value="{{ u }}" {{ "selected" if u == row.unit }}>{{ u }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Price per unit
+      <input type="text" inputmode="decimal" name="l{{ row.i }}_unit_price" value="{{ row.unit_price }}">
+    </label>
+  </div>
+  <label>Product
+    <input type="text" list="products" name="l{{ row.i }}_product" value="{{ row.product }}" maxlength="200" autocomplete="off">
+  </label>
+  <label>Category
+    <select name="l{{ row.i }}_category">
+      <option value="">-</option>
+      {% for c in categories %}<option value="{{ c.id }}" {{ "selected" if c.id == row.category_id }}>{{ c.name }}</option>{% endfor %}
+    </select>
+  </label>
+  {% if row.match_source == "mapping" %}<p class="muted">Recognised from an earlier receipt.</p>
+  {% elif row.match_source == "fuzzy" %}<p class="muted">Similar to a known product ({{ (row.match_conf * 100)|round|int }}%): check the name.</p>
+  {% endif %}
+  {% if row.flags %}<p class="warn">Quantity x price does not match the line total.</p>{% endif %}
+  <label class="check"><input type="checkbox" class="js-delete" name="l{{ row.i }}_delete"> Remove this line</label>
+</div>
+{% endmacro %}

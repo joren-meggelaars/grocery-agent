@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Receipts - Grocery Agent{% endblock %}
+{% block content %}
+<p><a href="/">&larr; Home</a></p>
+<h1>Receipts</h1>
+{% include "receipts/_budget.html" %}
+<nav class="stack">
+  <a class="btn primary" href="/receipts/new">Add receipt (photo or PDF)</a>
+  <a class="btn" href="/receipts/quick?store=bakery">Add bakery purchase</a>
+  <a class="btn" href="/receipts/quick?store=turkish">Add Turkish supermarket purchase</a>
+</nav>
+<ul class="list spaced">
+  {% for r in receipts %}
+  <li>
+    <a class="card row-link" href="/receipts/{{ r.id }}">
+      <span>
+        <strong>{{ r.store.name if r.store else "Unknown store" }}</strong>
+        <span class="muted">{{ r.purchased_on.isoformat() if r.purchased_on else "no date" }}</span>
+      </span>
+      <span>
+        {% if r.total_cents is not none %}EUR {{ fmt(r.total_cents) }}{% endif %}
+        <span class="badge status-{{ r.status }}">{{ labels[r.status] }}</span>
+      </span>
+    </a>
+  </li>
+  {% else %}
+  <li class="muted">No receipts yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

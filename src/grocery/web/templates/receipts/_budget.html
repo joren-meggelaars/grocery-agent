@@ -1,0 +1,5 @@
+{% if budget.exhausted %}
+<p class="alert" role="alert">API budget reached: EUR {{ "%.2f"|format(budget.spent) }} of {{ "%.2f"|format(budget.cap) }} this month. New receipts are not read until you raise LLM_MONTHLY_BUDGET_EUR.</p>
+{% elif budget.warn %}
+<p class="alert" role="alert">API spend is at {{ (budget.ratio * 100)|round|int }}% of the monthly budget (EUR {{ "%.2f"|format(budget.spent) }} of {{ "%.2f"|format(budget.cap) }}).</p>
+{% endif %}
