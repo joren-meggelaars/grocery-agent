@@ -120,6 +120,29 @@ def test_scan_page_is_identical_for_everyone_so_it_can_be_cached_offline(client,
     assert other.get("/capture", headers={"accept": "text/html"}).text == page.text
 
 
+def test_scan_page_says_the_barcode_is_optional_and_puts_the_photo_first(session):
+    client, _ = session
+    html = client.get("/capture").text
+    assert "(optional)" in html and "A photo of the shelf label is all you need" in html
+    assert html.index('id="label-photo"') < html.index('id="ean"')
+
+
+def test_a_photo_only_capture_works_end_to_end(session, db):
+    """No barcode at all: the product is recognised from the label text and the confirmed name."""
+    client, token = session
+    first = upload(client, token, ean="").json()["id"]
+    read(client, db, label=shelf_label(product_name="Halfvolle melk 1L"), off=off_found())
+    page = client.get(f"/capture/{first}").text
+    assert 'value="Halfvolle melk 1L"' in page and 'name="ean" class="big" inputmode="numeric" value=""' in page
+    assert client.post(f"/capture/{first}/confirm", data=form_data(client, ean="")).status_code == 303
+
+    second = upload(client, token, ean="", store="lidl").json()["id"]
+    read(client, db, label=shelf_label(product_name="halfvolle melk 1l", price_cents=99, unit_price_cents=99))
+    assert 'value="Halfvolle melk 1L"' in client.get(f"/capture/{second}").text  # matched by name alone
+    client.post(f"/capture/{second}/confirm", data=form_data(client, ean="", store="lidl", price="0,99", unit_price="0,99"))
+    assert "Cheaper than usual" in client.get(f"/capture/{second}").text
+
+
 def test_scan_page_requires_a_session(client):
     resp = client.get("/capture", headers={"accept": "text/html"})
     assert resp.status_code == 303 and resp.headers["location"].startswith("/login")

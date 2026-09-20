@@ -9,6 +9,7 @@ from grocery.db.session import make_engine, make_session_factory
 from grocery.security.bodylimit import BodyLimitMiddleware
 from grocery.security.deps import csrf_protect, require_auth
 from grocery.security.middleware import install_security_middleware
+from grocery.analytics import routes as analytics_routes
 from grocery.capture import routes as capture_routes
 from grocery.receipts import routes as receipt_routes
 from grocery.web import routes_auth, routes_home, routes_pwa
@@ -47,6 +48,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_home.router)
     app.include_router(routes_auth.router)
     app.include_router(receipt_routes.router)
+    app.include_router(analytics_routes.router)
     app.include_router(capture_routes.pages)
     app.include_router(capture_routes.api)
     app.include_router(routes_pwa.router)

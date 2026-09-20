@@ -7,7 +7,8 @@ Clothing Advisor. **Not exposed publicly**: the only way in is Tailscale Serve.
 Status: **Phase 0** (foundations: login, sessions, CSRF, security headers, deny-by-default routing, Postgres,
 migrations, backups), **Phase 1** (receipts: upload, reading with Claude, review and correct, validation,
 learned product names, quick add for the bakery and the Turkish supermarket) and **Phase 2** (in the shop: scan a
-barcode, photograph the shelf label, instant comparison with what you usually pay, offline queue). The full plan is in
+barcode, photograph the shelf label, instant comparison with what you usually pay, offline queue) and **Phase 3**
+(monthly overview against your reference, trend, categories and stores, and what you buy most). The full plan is in
 [docs/PLAN.md](docs/PLAN.md).
 
 ## Deploy on SRV-DOC-01
@@ -41,6 +42,7 @@ nano .env
 | `ANTHROPIC_API_KEY` | Key for reading receipts. Create a dedicated one in the Anthropic Console with a monthly limit of about EUR 5. Without it receipts fail with a message saying so. |
 | `LLM_MODEL_SHELF` / `LLM_EFFORT_SHELF` | Model and effort for shelf labels (default Sonnet 5, effort low). Labels are simple, so Haiku 4.5 may be enough later: compare readings in the `extractions` table first. |
 | `OFF_USER_AGENT` | Sent to Open Food Facts, which asks for an identifier with a contact, for example `GroceryAgent/0.1 (you@example.com)`. |
+| `MONTHLY_REFERENCE_EUR` | The monthly food budget the overview compares against (default 400). |
 | `LLM_MONTHLY_BUDGET_EUR` | New receipts are not read once the estimated spend this month reaches this (banner at 80%). Default 5. |
 
 ```bash
@@ -137,6 +139,28 @@ radar in Phase 5.
 
 Open Food Facts data is used under the ODbL licence (attribution is shown on the confirm screen). Every barcode you
 scan is sent to Open Food Facts once and cached afterwards, and only from the worker container.
+
+## Monthly overview (Phase 3)
+
+**Monthly overview** shows one calendar month (arrows for other months):
+- **Food spend** against your reference (default EUR 400, set `MONTHLY_REFERENCE_EUR`), with a meter that turns amber from
+  80% and red above 100%, the change against last month, the average of the previous months, and (from day 7) where the month
+  ends at the current pace. Big shops make that estimate rough.
+- **All purchases** is what actually left your wallet (the sum of the receipt totals). **Not food** is the household
+  category (`Huishouden & verzorging`); everything else counts as food.
+- **Trend:** six months as columns, this month highlighted, the reference as a line.
+- **Where it went:** per category. A discount is booked to the product line above it, so a discounted chicken reduces
+  *Vlees & vis*. Deposit, bags and rounding go to *Overig*.
+- **Not itemised** appears only when a receipt was saved with "lines do not add up": that difference is kept so the
+  numbers still add up to the receipt totals.
+- **Per store:** total spent per store, the bakery and the Turkish supermarket included.
+- Every chart has a **Table** underneath with all the numbers; tap a bar to see its value.
+
+**What I buy most** ranks products by the number of receipts they were on (a product twice on one receipt counts once),
+then by spend, with the usual price (per pack, or per kg for weighed goods) and the last purchase. Choose the period at
+the top. Only receipt lines that have a product name count, so name the lines when you review a receipt.
+
+Only **saved** receipts with a date count; receipts still under review, failed ones and shelf-label captures do not.
 
 ## Operations
 

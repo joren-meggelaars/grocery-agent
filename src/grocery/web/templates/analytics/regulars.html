@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}What I buy most - Grocery Agent{% endblock %}
+{% block content %}
+<p class="topbar"><a href="/">&larr; Home</a> <a href="/overview">Monthly overview</a></p>
+<h1>What I buy most</h1>
+
+<nav class="tabs" aria-label="Period">
+  {% for key, label in periods.items() %}
+  <a class="tab{{ ' current' if key == period }}" href="/regulars?period={{ key }}"{% if key == period %} aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{% if stats %}
+<p class="muted">Ranked by how many receipts the product was on, then by what you spent on it.</p>
+<ul class="list">
+  {% for s in stats %}
+  <li class="card regular">
+    <div class="regular-head"><strong>{{ s.name }}</strong><span class="regular-count">{{ s.times_bought }}&times;</span></div>
+    <p class="muted">{{ eur(s.total_cents) }} spent
+      {% if s.typical_price_cents is not none %}&middot; usual {{ eur(s.typical_price_cents) }} per {{ "kg" if s.basis == "kg" else "pack" }}{% endif %}</p>
+    <p class="muted">Last: {{ s.last_on.strftime("%d %b") }}, {{ s.last_store }}</p>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="card">No products yet in this period. Products appear here once you save receipts and give the lines a product name.</p>
+{% endif %}
+{% if unmatched %}
+<p class="muted">{{ unmatched }} product line{{ "s" if unmatched != 1 }} without a product name {{ "are" if unmatched != 1 else "is" }} not counted. Add the names on the receipt and they will be.</p>
+{% endif %}
+{% endblock %}

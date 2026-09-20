@@ -1,6 +1,6 @@
 # Grocery Agent: plan
 
-Status: approved 2026-09-20 with the decisions below. Phases 0, 1 and 2 built (2026-09-20).
+Status: approved 2026-09-20 with the decisions below. Phases 0, 1, 2 and 3 built (2026-09-20).
 
 ## Goals
 
@@ -97,7 +97,7 @@ raises `confirmed_count`.
 | **0 Foundations** (built) | Compose stack, login, sessions, CSRF, headers, deny-by-default, migrations, backup script, README | 1.5-2 |
 | **1 Receipts** (built, first real receipts pending) | Upload (multi-photo), extraction job, review/edit, validation, learned names, manual quick-add (bakery, Turkish supermarket per-kg), token/cost log, image retention job | 4-5 |
 | **2 In-store** (built, not yet tried in a shop) | Barcode scan (ZXing), shelf photo, confirm, OFF cache, "usual vs now" feedback, large-button UI, offline outbox, service worker | 4-5 |
-| **3 Analysis** | Top products, per category and store, monthly view vs EUR 400, trend, charts | 2 |
+| **3 Analysis** (built) | Top products, per category and store, monthly view vs EUR 400, trend, charts | 2 |
 | **4 Cupboard** | Scan to add stock, linked to last price and store | 1-1.5 |
 | **5 Deals radar and comparison** | Weekly folders of Lidl, Plus, Jumbo (Aldi optional) into `flyer_offers`, matched to what you buy, alerts for large savings; then per-product/basket comparison with identical vs substitute savings | 5-7 |
 
@@ -161,3 +161,16 @@ where SQL can decide, per-task model setting. To be measured from the logged tok
 - Not verified: the camera and scanner on a real iPhone (no device here), the real Claude call for shelf labels
   (prompt `shelf_v1`, stub-tested only), and the offline flow end to end on a phone. Expect one round of tuning after the
   first shop visit.
+
+## Phase 3 as built
+
+- Pure aggregation functions (`analytics/aggregate.py`) over plain facts, loaded by `analytics/queries.py`; the pages only
+  format. Month total = sum of receipt totals; categories come from the lines; a discount is booked to the item above it;
+  the remainder of an accepted receipt difference is shown as "Not itemised" (counted as food). Food spend =
+  categories flagged `counts_as_food` plus that remainder, compared with `MONTHLY_REFERENCE_EUR`.
+- Charts are server-rendered inline SVG (no library, nothing for the CSP to allow), one series each: the current month is
+  the accent and earlier months grey, bars at most 24px with a 4px rounded data end, hairline axis, a table next to every
+  chart, tooltips via a small script (tap or hover). Checked visually in a headless browser at phone width; colour contrast
+  of bars and status colours was computed against the card backgrounds in light and dark mode.
+- "Most bought" counts receipts, not lines. Shelf captures are prices, not purchases, and are not part of spend.
+- Not done on purpose: category budgets, per-product price trend charts (Phase 5 territory), export.

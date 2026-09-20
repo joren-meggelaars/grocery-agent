@@ -19,21 +19,24 @@
     {% for s in stores %}<option value="{{ s.chain }}">{{ s.name }}</option>{% endfor %}
   </select>
 
-  <h2>1. Barcode</h2>
+  <h2>1. Price label</h2>
+  <p class="muted">A photo of the shelf label is all you need.</p>
+  <label class="btn big primary file-btn" for="label-photo">Take photo of the price label</label>
+  <input id="label-photo" type="file" accept="image/*" capture="environment" hidden>
+  <img id="preview" class="receipt-img" alt="" hidden>
+
+  <h2>2. Barcode <span class="muted">(optional)</span></h2>
+  <p class="muted">Scanning it is the most reliable way to recognise the product next time. Without it the product is
+    recognised from the label text and the name you confirm.</p>
   <div id="scanner" class="scanner" hidden>
     <video id="scan-video" playsinline muted></video>
     <p class="muted">Point the camera at the barcode.</p>
     <button type="button" class="btn big" id="scan-stop">Stop camera</button>
   </div>
-  <button type="button" class="btn big primary" id="scan-start">Scan barcode</button>
+  <button type="button" class="btn big" id="scan-start">Scan barcode</button>
   <label for="ean">Or type the number</label>
-  <input id="ean" type="text" class="big" inputmode="numeric" autocomplete="off" placeholder="8710400012345">
+  <input id="ean" type="text" class="big" inputmode="numeric" autocomplete="off" placeholder="8710400012344">
   <p id="scan-msg" class="muted" role="status"></p>
-
-  <h2>2. Price label</h2>
-  <label class="btn big file-btn" for="label-photo">Take photo of the price label</label>
-  <input id="label-photo" type="file" accept="image/*" capture="environment" hidden>
-  <img id="preview" class="receipt-img" alt="" hidden>
 
   <label class="check"><input type="checkbox" id="review-now" checked> Review right after saving</label>
   <button type="button" class="btn big primary" id="save" disabled>Save</button>

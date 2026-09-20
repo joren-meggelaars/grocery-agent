@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     off_found_ttl_days: int = 30
     off_missing_ttl_days: int = 7
 
+    # What food should cost per month; the overview compares food spend against this.
+    monthly_reference_eur: float = 400.0
+
     timezone: str = "Europe/Amsterdam"  # for "today" when a capture has no explicit date
 
     # --- Uploads and transient image storage ---
