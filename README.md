@@ -118,6 +118,7 @@ Copy dumps off the VM now and then; a backup that lives only on the same disk is
 |---|---|
 | `Invalid host header` | The name in the URL is not in `ALLOWED_HOSTS`. The log line `rejected Host header` shows what arrived. |
 | Everything is `403 Forbidden` | Identity gate. Look for `tailscale identity rejected` / `ignoring Tailscale-User-Login header from untrusted peer X` in the logs: fix `TS_TRUSTED_PROXY_IPS` or `TS_ALLOWED_LOGINS`. Temporary escape hatch: `TS_IDENTITY_MODE=off`. |
+| `Cross-origin request rejected` | The Origin check refused a POST. The log line `rejected cross-origin` shows the Origin and Sec-Fetch-Site that arrived; the Origin host must be in `ALLOWED_HOSTS`. |
 | `Too many attempts` | Login lockout (5 failures, then 1 to 15 minutes). Wait, or run the `unlock` command above. |
 | Compose says a `$` variable is unset | A `$` in a `.env` value. Keep secrets alphanumeric. |
 

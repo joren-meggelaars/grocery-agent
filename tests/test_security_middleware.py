@@ -6,7 +6,7 @@ def test_security_headers_on_every_response(client):
     assert "script-src 'self'" in resp.headers["content-security-policy"]
     assert "frame-ancestors 'none'" in resp.headers["content-security-policy"]
     assert resp.headers["x-content-type-options"] == "nosniff"
-    assert resp.headers["referrer-policy"] == "no-referrer"
+    assert resp.headers["referrer-policy"] == "same-origin"
     assert "camera=(self)" in resp.headers["permissions-policy"]
     assert "max-age" in resp.headers["strict-transport-security"]
     assert resp.headers["cache-control"] == "no-store"
@@ -62,9 +62,22 @@ def test_post_without_origin_is_ok_if_browser_says_same_origin(client):
     assert login(client, password="wrong wrong wrong").status_code == 401  # got past the check
 
 
-def test_null_origin_is_rejected(client):
+def test_null_origin_is_rejected_without_fetch_metadata(client):
     client.headers["Origin"] = "null"
     assert login(client).status_code == 403
+
+
+def test_null_origin_is_rejected_when_browser_says_cross_site(client):
+    client.headers["Origin"] = "null"
+    client.headers["Sec-Fetch-Site"] = "cross-site"
+    assert login(client).status_code == 403
+
+
+def test_null_origin_is_accepted_when_browser_says_same_origin(client):
+    # Safari/Chrome send "Origin: null" on same-origin form posts under Referrer-Policy: no-referrer.
+    client.headers["Origin"] = "null"
+    client.headers["Sec-Fetch-Site"] = "same-origin"
+    assert login(client).status_code == 303
 
 
 def test_empty_allowed_hosts_falls_back_to_request_host(make_client):

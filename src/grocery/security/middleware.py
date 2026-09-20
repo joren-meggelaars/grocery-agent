@@ -29,7 +29,9 @@ CSP = (
 SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
     "X-Content-Type-Options": "nosniff",
-    "Referrer-Policy": "no-referrer",
+    # Not "no-referrer": with that policy browsers (Safari included) send "Origin: null"
+    # on same-origin form posts, which the Origin check cannot tell from a hostile one.
+    "Referrer-Policy": "same-origin",
     "Permissions-Policy": "camera=(self), microphone=(), geolocation=(), payment=()",
     "Cross-Origin-Opener-Policy": "same-origin",
     "Cross-Origin-Resource-Policy": "same-origin",
@@ -65,6 +67,10 @@ def _origin_ok(request: Request, allowed_hosts: list[str]) -> bool:
         # Browsers always send Origin on POST; only accept its absence if the
         # browser vouched for the request via Sec-Fetch-Site.
         return fetch_site is not None
+    if origin == "null":
+        # Sent for same-origin posts under some referrer policies and for sandboxed
+        # cross-site frames. Only the browser's own Fetch Metadata tells them apart.
+        return fetch_site == "same-origin"
     origin_host = urlsplit(origin).hostname
     if not origin_host:
         return False
@@ -91,7 +97,14 @@ def install_security_middleware(app: FastAPI) -> None:
                 request.state.ts_login = login
 
         if request.method in UNSAFE_METHODS and not _origin_ok(request, settings.allowed_hosts):
-            log.warning("rejected cross-origin %s %s", request.method, path)
+            log.warning(
+                "rejected cross-origin %s %s (Origin=%r Sec-Fetch-Site=%r allowed_hosts=%s)",
+                request.method,
+                path,
+                request.headers.get("origin"),
+                request.headers.get("sec-fetch-site"),
+                settings.allowed_hosts,
+            )
             return _deny(request, 403, "Cross-origin request rejected")
 
         return _finish(await call_next(request), request)
