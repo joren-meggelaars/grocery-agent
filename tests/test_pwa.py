@@ -70,7 +70,7 @@ def assert_csp_clean(html: str) -> None:
 def test_rendered_pages_are_csp_clean(client, db):
     login(client)
     for path in ("/", "/receipts", "/receipts/new", "/receipts/quick?store=turkish", "/capture", "/capture/queue",
-                 "/account", "/overview", "/regulars"):
+                 "/account", "/overview", "/regulars", "/cupboard", "/cupboard/scan", "/cupboard/name"):
         assert_csp_clean(client.get(path, headers={"accept": "text/html"}).text)
 
 

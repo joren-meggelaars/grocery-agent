@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Scan at home - Grocery Agent{% endblock %}
+{% block content %}
+<p class="topbar"><a href="/cupboard">&larr; Products at home</a> <a href="/cupboard/name">Name scanned</a></p>
+<h1>Scan at home</h1>
+<p class="muted">Hold one product's barcode in front of the camera at a time. The camera stays on; each barcode is
+  reported once. Unknown barcodes are looked up and named afterwards.</p>
+
+<section class="stack">
+  <div id="cb-scanner" class="scanner" hidden>
+    <video id="cb-video" playsinline muted></video>
+  </div>
+  <button type="button" class="btn big primary" id="cb-start">Start camera</button>
+  <button type="button" class="btn big" id="cb-stop" hidden>Stop camera</button>
+
+  <label for="cb-ean">Or type a number</label>
+  <div class="grid2">
+    <input id="cb-ean" type="text" class="big" inputmode="numeric" autocomplete="off" placeholder="8710400012344">
+    <button type="button" class="btn big" id="cb-add">Add</button>
+  </div>
+
+  <p class="card" role="status" aria-live="polite">
+    On the list: <strong id="cb-added">0</strong> &middot; waiting for a name: <strong id="cb-waiting">{{ waiting }}</strong>
+  </p>
+  <ul id="cb-log" class="list"></ul>
+  <a class="btn big" href="/cupboard/name">Name the scanned products</a>
+</section>
+
+<script src="{{ static_url('vendor/zxing/zxing-library.min.js') }}" defer></script>
+<script src="{{ static_url('js/scanner.js') }}" defer></script>
+<script src="{{ static_url('js/cupboard_scan.js') }}" defer></script>
+{% endblock %}

@@ -72,6 +72,17 @@ docker compose exec db psql -U grocery -d grocery \
 - [ ] F7. Dark mode: charts and the meter stay readable.
 - [ ] F8. Is a receipt from a past month counted in that month (change the date on the review screen and check both months)?
 
+## H. Products at home (one evening, at home)
+
+- [ ] H1. **Scan products at home, Start camera:** hold ten products' barcodes in front of the camera one after the other. Does each one appear in the result list, once, without repeats while you hold it still?
+- [ ] H2. Do known barcodes (scanned in a shop before) go on the list at once, and unknown ones under *waiting for a name*?
+- [ ] H3. **Name scanned products:** is the Open Food Facts name filled in and reasonable? Are the categories easy to pick?
+- [ ] H4. Type a product name that you also have on receipts: does the suggestion list show it, so they end up as one product?
+- [ ] H5. Mark a few products *used a lot* (the star). Are they at the top of **Products at home**?
+- [ ] H6. A product without a barcode (bread, fruit): does *Add a product without a barcode* work?
+- [ ] H7. After a few receipts: does each product show what you last paid and where? Do you see *Seen cheaper* when a Lidl label was cheaper?
+- [ ] H8. In the shop: scan the label of a product on the list. Does the confirm screen say *You have this at home*?
+
 ## G. Known gaps on my side (not tested, not blocking)
 
 - The real Claude call for shelf labels (prompt `shelf_v1`) has only run against a stub. Expect one tuning round.

@@ -303,6 +303,33 @@ class ShelfCapture(Base):
     product: Mapped[Product | None] = relationship()
 
 
+class CupboardItem(Base):
+    """A product the user has at home: the starting list for price comparison. No quantities, no expiry."""
+
+    __tablename__ = "cupboard_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), unique=True)
+    heavy_use: Mapped[bool] = mapped_column(Boolean, default=False)  # "I use this a lot"
+    added_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    last_scanned_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    product: Mapped[Product] = relationship()
+
+
+class CupboardScan(Base):
+    """A scanned barcode nobody has named yet; named in one go after the scanning round."""
+
+    __tablename__ = "cupboard_scans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ean: Mapped[str] = mapped_column(String(14), unique=True)
+    status: Mapped[str] = mapped_column(String(12))  # lookup | needs_name
+    off_name: Mapped[str | None] = mapped_column(String(300))
+    seen_count: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
 class PriceObservation(Base):
     """One observed price for a product at a store: from a receipt line or a shelf label."""
 

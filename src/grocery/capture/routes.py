@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from grocery.capture import forms
+from grocery.cupboard.service import on_cupboard
 from grocery.capture.service import (
     categories,
     confirm_capture,
@@ -129,6 +130,7 @@ def _detail(request, principal, db, capture, values=None, errors=None, status=20
             "feedback": _feedback(db, request, capture), "basis_label": BASIS_LABEL,
             "notes": (capture.extraction.raw_json or {}).get("legibility_notes") if capture.extraction else None,
             "has_photo": bool(capture.file and capture.file.path),
+            "on_cupboard": on_cupboard(db, capture.product_id),
             "settings": settings,
         },
         status_code=status,

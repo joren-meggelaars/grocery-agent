@@ -59,6 +59,8 @@
   </div>
   {% endif %}
 
+  {% if on_cupboard %}<p class="card">You have this at home: it is on your <a href="/cupboard">products-at-home list</a>.</p>{% endif %}
+
   <nav class="stack spaced">
     <a class="btn big primary" href="/capture">Scan next</a>
     <a class="btn" href="/capture/{{ capture.id }}?manual=1">Edit</a>

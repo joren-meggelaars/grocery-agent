@@ -41,6 +41,9 @@ def _seen(o: PriceObservation, value: int) -> Seen:
     return Seen(o.store.name, value, o.observed_on, o.source, o.is_promo)
 
 
+seen_from = _seen  # public name for the cupboard list
+
+
 def feedback_for(
     db: Session,
     product_id: int,

@@ -4,14 +4,15 @@ import logging
 from collections.abc import Callable
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from grocery.capture.service import run_capture
 from grocery.config import Settings
-from grocery.db.models import Job, Receipt, ShelfCapture
+from grocery.db.models import CupboardScan, Job, Receipt, ShelfCapture
 from grocery.jobs import queue
 from grocery.llm.client import ImageReader, ReaderUnavailable, make_shelf_reader
-from grocery.products.off import Fetcher, http_fetch
+from grocery.products.off import Fetcher, http_fetch, lookup
 from grocery.receipts.service import ExtractionRetry, run_extraction
 
 log = logging.getLogger(__name__)
@@ -71,6 +72,18 @@ def _process_capture(
     queue.complete(db, job, now)
 
 
+def _lookup_ean(db: Session, settings: Settings, job: Job, off_fetch: Fetcher, now) -> None:
+    """Fill in what Open Food Facts calls a scanned barcode. Unknown or unreachable is fine: the user names it."""
+    ean = job.payload["ean"]
+    pending = db.scalar(select(CupboardScan).where(CupboardScan.ean == ean))
+    if pending is not None:
+        product = lookup(db, settings, ean, off_fetch, now)
+        pending.off_name = product.display if product else None
+        pending.status = "needs_name"
+        db.commit()
+    queue.complete(db, job, now)
+
+
 def process_one(
     db: Session,
     settings: Settings,
@@ -89,6 +102,8 @@ def process_one(
             _extract_receipt(db, settings, job, reader_factory, now)
         elif job.kind == "process_capture":
             _process_capture(db, settings, job, shelf_reader_factory, off_fetch, now)
+        elif job.kind == "lookup_ean":
+            _lookup_ean(db, settings, job, off_fetch, now)
         else:
             queue.fail(db, job, f"unknown job kind {job.kind!r}", retryable=False, now=now)
     except Exception as exc:  # a bug must not kill the worker loop
@@ -99,4 +114,9 @@ def process_one(
             _fail_receipt(db, job.payload["receipt_id"], "Something went wrong while reading this receipt.")
         elif job.kind == "process_capture":
             _fail_capture(db, job.payload["capture_id"], "Something went wrong while reading this label.")
+        elif job.kind == "lookup_ean":  # never leave a barcode stuck in "lookup": the user can still name it
+            pending = db.scalar(select(CupboardScan).where(CupboardScan.ean == job.payload["ean"]))
+            if pending is not None:
+                pending.status = "needs_name"
+                db.commit()
     return True

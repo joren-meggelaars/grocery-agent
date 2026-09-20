@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Products at home - Grocery Agent{% endblock %}
+{% block content %}
+<p class="topbar"><a href="/">&larr; Home</a> <a href="/regulars">What I buy most</a></p>
+<h1>Products at home</h1>
+<p class="muted">The products you have at home and use. This is your list to compare at cheaper shops: for each one you
+  see what you paid, where, and whether it was seen cheaper elsewhere.</p>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+<nav class="stack">
+  <a class="btn big primary" href="/cupboard/scan">Scan products at home</a>
+  {% if waiting %}<a class="btn big" href="/cupboard/name">Name {{ waiting }} scanned product{{ "s" if waiting != 1 }}</a>{% endif %}
+</nav>
+
+<details class="card spaced">
+  <summary>Add a product without a barcode</summary>
+  <form method="post" action="/cupboard/add" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Product<input type="text" name="product" list="products" maxlength="200" autocomplete="off" required></label>
+    <label>Category
+      <select name="category"><option value="">-</option>
+        {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" name="heavy"> I use this a lot</label>
+    <button type="submit" class="btn">Add</button>
+  </form>
+  <datalist id="products">{% for name in product_names %}<option value="{{ name }}">{% endfor %}</datalist>
+</details>
+
+{% if rows %}
+<ul class="list spaced">
+  {% for r in rows %}
+  <li class="card cupboard-item">
+    <div class="regular-head">
+      <strong>{{ r.name }}</strong>
+      <form method="post" action="/cupboard/items/{{ r.item.id }}/heavy">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="value" value="{{ '0' if r.heavy else '1' }}">
+        <button type="submit" class="star{{ ' on' if r.heavy }}" aria-pressed="{{ 'true' if r.heavy else 'false' }}"
+                aria-label="{{ 'Used a lot: tap to unmark' if r.heavy else 'Mark as used a lot' }}">{{ "&#9733;"|safe if r.heavy else "&#9734;"|safe }}</button>
+      </form>
+    </div>
+    <p class="muted">{{ r.category or "No category" }}{% if r.heavy %} &middot; used a lot{% endif %}
+      {% if r.times_bought %} &middot; bought {{ r.times_bought }}&times; in the last 90 days{% endif %}</p>
+    {% if r.last %}
+      <p>{{ "Last paid" if r.paid else "Last seen" }}: <strong>{{ eur(r.last.value) }}</strong> {{ basis_label[r.basis] }} at {{ r.last.store }}
+        <span class="muted">({{ r.last.observed_on.strftime("%d %b") }}, {{ r.last.source }})</span></p>
+      {% if r.cheaper %}
+      <p class="cheaper"><strong>Seen cheaper:</strong> {{ r.cheaper.store }} {{ eur(r.cheaper.value) }}
+        <span class="muted">({{ r.cheaper.source }}, {{ r.cheaper.observed_on.strftime("%d %b") }}{% if r.cheaper.promo %}, promotion{% endif %})</span></p>
+      {% endif %}
+    {% else %}
+      <p class="muted">No price seen yet. Scan its shelf label in the shop, or save a receipt with this product.</p>
+    {% endif %}
+    <form method="post" action="/cupboard/items/{{ r.item.id }}/remove" data-confirm="Remove {{ r.name }} from the list?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn">Remove</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="card spaced">Nothing here yet. Press <strong>Scan products at home</strong> and hold each product's barcode in front of
+  the camera, one after the other. Unknown barcodes are named afterwards, all at once.</p>
+{% endif %}
+{% endblock %}

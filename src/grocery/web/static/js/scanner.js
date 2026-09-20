@@ -10,7 +10,7 @@
     return (10 - (sum % 10)) % 10 === parseInt(digits.slice(-1), 10);
   }
 
-  var stream = null, timer = null, running = false;
+  var stream = null, timer = null, running = false, lastCode = "", lastAt = 0;
 
   function stop() {
     running = false;
@@ -49,12 +49,16 @@
     };
   }
 
-  // start(videoElement, onCode, onError): calls onCode(digits) once with a barcode whose check digit is valid.
-  function start(video, onCode, onError) {
+  // start(videoElement, onCode, onError, options): calls onCode(digits) with a barcode whose check digit is valid.
+  // By default it stops after the first one; with {continuous: true} the camera keeps running and the same
+  // barcode is not reported again within options.cooldown milliseconds (for scanning a whole shelf).
+  function start(video, onCode, onError, options) {
+    options = options || {};
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       onError("This browser cannot use the camera here. Type the number instead.");
       return;
     }
+    lastCode = ""; lastAt = 0;
     var decode = makeDecoder();
     if (!decode) { onError("The barcode reader did not load. Type the number instead."); return; }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } }, audio: false })
@@ -69,7 +73,18 @@
           decode(video).then(function (text) {
             if (!running) return;
             var digits = text ? String(text).replace(/\D/g, "") : "";
-            if (digits && checkDigitOk(digits)) { stop(); if (navigator.vibrate) navigator.vibrate(60); onCode(digits); return; }
+            if (digits && checkDigitOk(digits)) {
+              if (navigator.vibrate) navigator.vibrate(60);
+              if (!options.continuous) { stop(); onCode(digits); return; }
+              // Report a barcode when it is a different one, or the same one after it had been out of view for
+              // a while. Seeing it again refreshes the timer, so holding one steady never reports it twice.
+              var now = Date.now();
+              var fresh = digits !== lastCode || now - lastAt > (options.cooldown || 3000);
+              lastCode = digits; lastAt = now;
+              if (fresh) onCode(digits);
+              timer = setTimeout(loop, 600);
+              return;
+            }
             timer = setTimeout(loop, 150);
           }).catch(function () { timer = setTimeout(loop, 300); });
         })();

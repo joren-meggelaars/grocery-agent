@@ -7,8 +7,9 @@ Clothing Advisor. **Not exposed publicly**: the only way in is Tailscale Serve.
 Status: **Phase 0** (foundations: login, sessions, CSRF, security headers, deny-by-default routing, Postgres,
 migrations, backups), **Phase 1** (receipts: upload, reading with Claude, review and correct, validation,
 learned product names, quick add for the bakery and the Turkish supermarket) and **Phase 2** (in the shop: scan a
-barcode, photograph the shelf label, instant comparison with what you usually pay, offline queue) and **Phase 3**
-(monthly overview against your reference, trend, categories and stores, and what you buy most). The full plan is in
+barcode, photograph the shelf label, instant comparison with what you usually pay, offline queue) **Phase 3**
+(monthly overview against your reference, trend, categories and stores, and what you buy most) and **Phase 4**
+(a one-off inventory of the products you have at home, as the list to compare at cheaper shops). The full plan is in
 [docs/PLAN.md](docs/PLAN.md).
 
 ## Deploy on SRV-DOC-01
@@ -161,6 +162,24 @@ then by spend, with the usual price (per pack, or per kg for weighed goods) and 
 the top. Only receipt lines that have a product name count, so name the lines when you review a receipt.
 
 Only **saved** receipts with a date count; receipts still under review, failed ones and shelf-label captures do not.
+
+## Products at home (Phase 4)
+
+A one-off inventory, not stock keeping: no quantities and no expiry dates. The goal is a list of the products you have at
+home and use, so you know what to compare at cheaper shops.
+
+1. **Products at home, Scan products at home, Start camera.** Hold one barcode at a time in front of the camera; the
+   camera stays on and each barcode is reported once. A barcode the app already knows (from a shelf scan or an earlier
+   round) goes on the list at once; an unknown one is queued and the worker looks its name up at Open Food Facts.
+2. **Name scanned products:** one screen with every unknown barcode, the Open Food Facts name prefilled (or the existing
+   product when the name matches). Use the same short names you use on receipts; typing shows your known products. Tick
+   *I use this a lot* where it applies.
+3. **The list:** heavy-use products first, then by how often you bought them in the last 90 days. Per product: what you
+   last paid and where (from a receipt), and **Seen cheaper** when a shelf label or receipt at another shop was cheaper
+   in the last two months. Products without a barcode (fresh produce, bread) can be added by name.
+4. In the shop, when you scan a label of a product that is on the list, the confirm screen says *You have this at home*.
+
+The list is the starting point for Phase 5: the products you use most are the ones worth comparing at Lidl.
 
 ## Operations
 

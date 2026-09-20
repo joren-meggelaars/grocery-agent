@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Name scanned products - Grocery Agent{% endblock %}
+{% block content %}
+<p class="topbar"><a href="/cupboard">&larr; Products at home</a> <a href="/cupboard/scan">Scan more</a></p>
+<h1>Name scanned products</h1>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+{% if pending %}
+<p class="muted">Barcodes the app did not know. The name from Open Food Facts is filled in when it exists; use a short name
+  you will recognise, ideally the same one you use on receipts (start typing to see your products).</p>
+<ul class="list">
+  {% for p in pending %}
+  <li class="card">
+    <p class="muted">Barcode {{ p.scan.ean }}{% if p.scan.seen_count > 1 %} &middot; scanned {{ p.scan.seen_count }}&times;{% endif %}
+      {% if p.scan.status == "lookup" %} &middot; looking up the name...{% elif p.scan.off_name %} &middot; Open Food Facts: {{ p.scan.off_name }}{% else %} &middot; not in Open Food Facts{% endif %}</p>
+    <form method="post" action="/cupboard/name/{{ p.scan.id }}" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Product<input type="text" name="product" class="big" list="products" value="{{ p.name }}" maxlength="200" autocomplete="off"></label>
+      <label>Category
+        <select name="category" class="big"><option value="">-</option>
+          {% for c in categories %}<option value="{{ c.id }}" {{ "selected" if c.id == p.category_id }}>{{ c.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="heavy"> I use this a lot</label>
+      <button type="submit" class="btn big primary">Save</button>
+    </form>
+    <form method="post" action="/cupboard/name/{{ p.scan.id }}/discard" class="stack spaced">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn">Skip this one</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+<datalist id="products">{% for name in product_names %}<option value="{{ name }}">{% endfor %}</datalist>
+{% else %}
+<p class="card">Nothing waiting for a name. <a href="/cupboard/scan">Scan more products</a> or <a href="/cupboard">see your list</a>.</p>
+{% endif %}
+{% endblock %}

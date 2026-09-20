@@ -240,3 +240,11 @@ details > summary { cursor: pointer; padding: 10px 0; font-weight: 600; }
 .regular-head { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
 .regular-count { font-weight: 800; white-space: nowrap; }
 .regular p { margin: 4px 0 0; }
+
+/* --- cupboard --- */
+.star { min-width: 48px; min-height: 48px; font-size: 1.6rem; line-height: 1; color: var(--muted); background: transparent; border: 2px solid var(--border); border-radius: 12px; cursor: pointer; }
+.star.on { color: var(--fg); background: var(--card); }
+.cupboard-item p { margin: 4px 0; }
+.cheaper { color: var(--good); }
+.scan-result.good { border-color: var(--good); }
+.scan-result.bad { border-color: var(--bad); color: var(--bad); }
