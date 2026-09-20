@@ -6,7 +6,13 @@ from fastapi.routing import APIRoute
 
 from grocery.security.deps import is_public
 
-EXPECTED_PUBLIC = {("/healthz", "GET"), ("/login", "GET"), ("/login", "POST")}
+EXPECTED_PUBLIC = {
+    ("/healthz", "GET"),
+    ("/login", "GET"),
+    ("/login", "POST"),
+    ("/sw.js", "GET"),  # service worker and manifest: nothing private in them
+    ("/manifest.webmanifest", "GET"),
+}
 
 
 def _flatten(routes):

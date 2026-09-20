@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Scan in store - Grocery Agent{% endblock %}
+{% block content %}
+<p class="topbar">
+  <a href="/">&larr; Home</a>
+  <a href="/capture/queue">To review</a>
+</p>
+<h1>Scan in store</h1>
+
+<p id="outbox-status" class="card outbox" role="status" hidden>
+  <strong id="pending-count">0</strong> waiting to upload
+  <a href="/login?next=%2Fcapture" id="login-link" hidden>Sign in to upload</a>
+</p>
+<ul id="outbox-list" class="list" hidden></ul>
+
+<section class="stack">
+  <label for="store">Store</label>
+  <select id="store" class="big">
+    {% for s in stores %}<option value="{{ s.chain }}">{{ s.name }}</option>{% endfor %}
+  </select>
+
+  <h2>1. Barcode</h2>
+  <div id="scanner" class="scanner" hidden>
+    <video id="scan-video" playsinline muted></video>
+    <p class="muted">Point the camera at the barcode.</p>
+    <button type="button" class="btn big" id="scan-stop">Stop camera</button>
+  </div>
+  <button type="button" class="btn big primary" id="scan-start">Scan barcode</button>
+  <label for="ean">Or type the number</label>
+  <input id="ean" type="text" class="big" inputmode="numeric" autocomplete="off" placeholder="8710400012345">
+  <p id="scan-msg" class="muted" role="status"></p>
+
+  <h2>2. Price label</h2>
+  <label class="btn big file-btn" for="label-photo">Take photo of the price label</label>
+  <input id="label-photo" type="file" accept="image/*" capture="environment" hidden>
+  <img id="preview" class="receipt-img" alt="" hidden>
+
+  <label class="check"><input type="checkbox" id="review-now" checked> Review right after saving</label>
+  <button type="button" class="btn big primary" id="save" disabled>Save</button>
+  <p id="msg" class="muted" role="status"></p>
+</section>
+
+<script src="{{ static_url('vendor/zxing/zxing-library.min.js') }}" defer></script>
+<script src="{{ static_url('js/outbox.js') }}" defer></script>
+<script src="{{ static_url('js/scanner.js') }}" defer></script>
+<script src="{{ static_url('js/capture.js') }}" defer></script>
+{% endblock %}

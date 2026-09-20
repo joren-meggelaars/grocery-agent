@@ -3,6 +3,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from grocery.capture.service import review_count
 from grocery.llm.budget import budget_state
 from grocery.security.deps import Principal, current_principal, get_db, public
 from grocery.web.templating import templates
@@ -33,5 +34,6 @@ def home(
             "user": principal.user,
             "csrf_token": principal.csrf_token,
             "budget": budget_state(db, request.app.state.settings),
+            "to_review": review_count(db),
         },
     )

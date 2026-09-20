@@ -4,6 +4,8 @@
 <p class="muted">Signed in as {{ user.username }}.</p>
 {% include "receipts/_budget.html" %}
 <nav class="stack">
+  <a class="btn primary big" href="/capture">Scan in store</a>
+  {% if to_review %}<a class="btn" href="/capture/queue">{{ to_review }} capture{{ "s" if to_review != 1 }} to review</a>{% endif %}
   <a class="btn primary" href="/receipts/new">Add receipt</a>
   <a class="btn" href="/receipts">Receipts</a>
   <a class="btn" href="/receipts/quick?store=bakery">Bakery</a>

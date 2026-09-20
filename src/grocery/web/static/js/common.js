@@ -6,3 +6,10 @@
     });
   });
 })();
+
+// Offline support for the capture page (see sw.js).
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () { /* unsupported or blocked */ });
+  });
+}

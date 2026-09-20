@@ -240,3 +240,90 @@ class Job(Base):
     last_error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class ProductEan(Base):
+    """Barcode -> canonical product, learned when a scanned product is named and confirmed."""
+
+    __tablename__ = "product_eans"
+
+    ean: Mapped[str] = mapped_column(String(14), primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"), index=True)
+    source: Mapped[str] = mapped_column(String(8))  # scan | manual
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    product: Mapped[Product] = relationship()
+
+
+class OffCache(Base):
+    """Open Food Facts answers, including "not found", so each barcode is asked for at most once per TTL."""
+
+    __tablename__ = "off_cache"
+
+    ean: Mapped[str] = mapped_column(String(14), primary_key=True)
+    found: Mapped[bool] = mapped_column(Boolean)
+    payload: Mapped[dict | None] = mapped_column(JSONType)
+    fetched_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UTCDateTime)
+
+
+class ShelfCapture(Base):
+    __tablename__ = "shelf_captures"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    client_uuid: Mapped[str] = mapped_column(String(36), unique=True)  # idempotency key from the phone
+    ean: Mapped[str | None] = mapped_column(String(14), index=True)
+    store_id: Mapped[int | None] = mapped_column(ForeignKey("stores.id"))
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime)
+    received_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    file_id: Mapped[int | None] = mapped_column(ForeignKey("files.id"))
+    # extracting | needs_review | confirmed | failed
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    error: Mapped[str | None] = mapped_column(Text)
+    extraction_id: Mapped[int | None] = mapped_column(ForeignKey("extractions.id"))
+    off_name: Mapped[str | None] = mapped_column(String(300))  # what Open Food Facts calls this barcode
+
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id"))
+    product_name: Mapped[str | None] = mapped_column(String(200))
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"))
+    price_cents: Mapped[int | None] = mapped_column(Integer)  # shelf price for one pack
+    effective_price_cents: Mapped[int | None] = mapped_column(Integer)  # per item once the promotion applies
+    unit_price_cents: Mapped[int | None] = mapped_column(Integer)  # per kg or l
+    unit_basis: Mapped[str | None] = mapped_column(String(4))  # kg | l
+    promo_kind: Mapped[str | None] = mapped_column(String(16))
+    promo_text: Mapped[str | None] = mapped_column(String(200))
+    requires_card: Mapped[bool] = mapped_column(Boolean, default=False)
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    confirmed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    store: Mapped[Store | None] = relationship()
+    file: Mapped[StoredFile | None] = relationship()
+    extraction: Mapped[Extraction | None] = relationship()
+    product: Mapped[Product | None] = relationship()
+
+
+class PriceObservation(Base):
+    """One observed price for a product at a store: from a receipt line or a shelf label."""
+
+    __tablename__ = "price_observations"
+    __table_args__ = (Index("ix_price_observations_product_observed", "product_id", "observed_on"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
+    ean: Mapped[str | None] = mapped_column(String(14))
+    store_id: Mapped[int] = mapped_column(ForeignKey("stores.id"))
+    price_cents: Mapped[int] = mapped_column(Integer)  # what one pack / the weighed line costs
+    unit_price_cents: Mapped[int | None] = mapped_column(Integer)
+    unit_basis: Mapped[str | None] = mapped_column(String(4))  # kg | l
+    is_promo: Mapped[bool] = mapped_column(Boolean, default=False)
+    promo_text: Mapped[str | None] = mapped_column(String(200))
+    requires_card: Mapped[bool] = mapped_column(Boolean, default=False)
+    observed_on: Mapped[date] = mapped_column(Date)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    source: Mapped[str] = mapped_column(String(12))  # receipt | shelf
+    source_ref_id: Mapped[int | None] = mapped_column(Integer)  # receipt id or shelf capture id
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    store: Mapped[Store] = relationship()
+    product: Mapped[Product | None] = relationship()

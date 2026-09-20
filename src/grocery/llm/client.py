@@ -1,4 +1,4 @@
-"""Receipt reading through the Claude API (or a fake in tests).
+"""Reading images through the Claude API (or a fake in tests): receipts and shelf labels.
 
 The model call goes through messages.create with a JSON schema; the reply is validated with
 Pydantic here rather than inside the SDK, so the raw model output is kept even when it does
@@ -14,16 +14,17 @@ from pathlib import Path
 from typing import Protocol
 
 import anthropic
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from grocery.config import Settings
-from grocery.llm.schemas import ReceiptExtraction
+from grocery.llm.schemas import ReceiptExtraction, ShelfLabelExtraction
 from grocery.refdata import CATEGORIES
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "receipt_v1"
-_PROMPT_FILE = Path(__file__).parent / "prompts" / f"{PROMPT_VERSION}.md"
+PROMPT_VERSION = "receipt_v1"  # kept for receipts; shelf labels have their own version below
+SHELF_PROMPT_VERSION = "shelf_v1"
+_PROMPTS = Path(__file__).parent / "prompts"
 MAX_OUTPUT_TOKENS = 16000
 
 
@@ -41,7 +42,7 @@ class Usage:
 
 @dataclass
 class ReadResult:
-    parsed: ReceiptExtraction | None
+    parsed: BaseModel | None
     raw: dict | None
     model: str
     usage: Usage = field(default_factory=Usage)
@@ -51,29 +52,48 @@ class ReadResult:
     retryable: bool = False  # transient failure (network, overload): worth another attempt
 
 
-class ReceiptReader(Protocol):
+class ImageReader(Protocol):
     model: str
     prompt_version: str
 
     def read(self, images: list[bytes], text: str | None) -> ReadResult: ...
 
 
-def system_prompt() -> str:
-    names = ", ".join(f'"{name}"' for name, _ in CATEGORIES)
-    return _PROMPT_FILE.read_text(encoding="utf-8").replace("{categories}", names)
+# Both readers share the protocol; the aliases document intent at the call sites.
+ReceiptReader = ImageReader
+ShelfReader = ImageReader
 
 
-class AnthropicReceiptReader:
-    prompt_version = PROMPT_VERSION
+def _categories() -> str:
+    return ", ".join(f'"{name}"' for name, _ in CATEGORIES)
 
-    def __init__(self, settings: Settings) -> None:
+
+def system_prompt(version: str = PROMPT_VERSION) -> str:
+    text = (_PROMPTS / f"{version}.md").read_text(encoding="utf-8")
+    return text.replace("{categories}", _categories())
+
+
+class AnthropicVisionReader:
+    def __init__(
+        self,
+        settings: Settings,
+        *,
+        model: str,
+        effort: str,
+        schema_model: type[BaseModel],
+        prompt_version: str,
+        instruction: str,
+    ) -> None:
         if settings.anthropic_api_key is None:
             raise ReaderUnavailable("ANTHROPIC_API_KEY is not set")
-        self.model = settings.llm_model
-        self.effort = settings.llm_effort
+        self.model = model
+        self.effort = effort
+        self.prompt_version = prompt_version
+        self._schema_model = schema_model
+        self._instruction = instruction
         self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
-        self._system = system_prompt()
-        self._schema = anthropic.transform_schema(ReceiptExtraction.model_json_schema())
+        self._system = system_prompt(prompt_version)
+        self._schema = anthropic.transform_schema(schema_model.model_json_schema())
 
     def read(self, images: list[bytes], text: str | None) -> ReadResult:
         content: list[dict] = [
@@ -87,9 +107,9 @@ class AnthropicReceiptReader:
             }
             for img in images
         ]
-        instruction = "Extract this receipt."
+        instruction = self._instruction
         if text:
-            instruction += f"\n\nText layer of the receipt:\n{text}"
+            instruction += f"\n\nText layer of the document:\n{text}"
         content.append({"type": "text", "text": instruction})
 
         started = time.monotonic()
@@ -131,15 +151,15 @@ class AnthropicReceiptReader:
         if response.stop_reason == "refusal":
             return ReadResult(None, None, error="The model declined to read this image.", **base)
         if response.stop_reason == "max_tokens":
-            return ReadResult(None, None, error="The model's answer was cut off (receipt too long).", **base)
+            return ReadResult(None, None, error="The model's answer was cut off (image too long).", **base)
         try:
             raw = json.loads(text_out)
         except ValueError:
             return ReadResult(None, None, error="The model did not return valid JSON.", **base)
         try:
-            parsed = ReceiptExtraction.model_validate(raw)
+            parsed = self._schema_model.model_validate(raw)
         except ValidationError as exc:
-            log.warning("receipt extraction failed validation: %s", exc.errors()[:3])
+            log.warning("%s extraction failed validation: %s", self.prompt_version, exc.errors()[:3])
             return ReadResult(None, raw, error="The model's answer did not match the expected format.", **base)
         return ReadResult(parsed, raw, **base)
 
@@ -155,5 +175,33 @@ class AnthropicReceiptReader:
         )
 
 
+class AnthropicReceiptReader(AnthropicVisionReader):
+    def __init__(self, settings: Settings) -> None:
+        super().__init__(
+            settings,
+            model=settings.llm_model,
+            effort=settings.llm_effort,
+            schema_model=ReceiptExtraction,
+            prompt_version=PROMPT_VERSION,
+            instruction="Extract this receipt.",
+        )
+
+
+class AnthropicShelfReader(AnthropicVisionReader):
+    def __init__(self, settings: Settings) -> None:
+        super().__init__(
+            settings,
+            model=settings.llm_model_shelf,
+            effort=settings.llm_effort_shelf,
+            schema_model=ShelfLabelExtraction,
+            prompt_version=SHELF_PROMPT_VERSION,
+            instruction="Read this supermarket shelf price label.",
+        )
+
+
 def make_reader(settings: Settings) -> ReceiptReader:
     return AnthropicReceiptReader(settings)
+
+
+def make_shelf_reader(settings: Settings) -> ShelfReader:
+    return AnthropicShelfReader(settings)

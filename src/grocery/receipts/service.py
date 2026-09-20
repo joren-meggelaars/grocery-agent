@@ -24,6 +24,7 @@ from grocery.llm.budget import budget_state
 from grocery.llm.client import ReadResult, ReceiptReader
 from grocery.llm.pricing import estimate_cost_eur
 from grocery.llm.schemas import ReceiptExtraction
+from grocery.prices.observations import delete_receipt_observations, record_receipt
 from grocery.products.matching import Match, MatchIndex
 from grocery.products.normalize import normalize_raw, product_key
 from grocery.receipts.validation import LineData, ValidationResult, expected_line_total, validate_receipt
@@ -318,6 +319,9 @@ def _get_or_create_product(db: Session, name: str, category_id: int | None) -> P
     return product
 
 
+get_or_create_product = _get_or_create_product
+
+
 def _learn_mapping(db: Session, chain: str, raw_text: str, product: Product, now: datetime) -> None:
     key = normalize_raw(raw_text)
     if not key:
@@ -416,6 +420,7 @@ def confirm_receipt(
     receipt.error = None
     db.flush()
     refresh_flags(db, receipt)
+    record_receipt(db, receipt)
     schedule_deletion(db, receipt.id, now + timedelta(days=settings.confirmed_retention_days))
     db.commit()
     return result
@@ -478,6 +483,8 @@ def quick_add(
         )
     )
     db.add(receipt)
+    db.flush()
+    record_receipt(db, receipt)
     db.commit()
     return receipt
 
@@ -488,6 +495,7 @@ def delete_receipt(db: Session, settings: Settings, receipt: Receipt) -> None:
     files = [rf.file for rf in receipt.files]
     for file in files:
         remove_from_disk(settings, file)
+    delete_receipt_observations(db, receipt.id)
     db.delete(receipt)  # cascades to receipt_files and lines
     db.flush()
     for file in files:

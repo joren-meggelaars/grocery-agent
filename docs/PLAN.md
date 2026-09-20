@@ -1,6 +1,6 @@
 # Grocery Agent: plan
 
-Status: approved 2026-09-20 with the decisions below. Phases 0 and 1 built (2026-09-20).
+Status: approved 2026-09-20 with the decisions below. Phases 0, 1 and 2 built (2026-09-20).
 
 ## Goals
 
@@ -96,7 +96,7 @@ raises `confirmed_count`.
 |---|---|---|
 | **0 Foundations** (built) | Compose stack, login, sessions, CSRF, headers, deny-by-default, migrations, backup script, README | 1.5-2 |
 | **1 Receipts** (built, first real receipts pending) | Upload (multi-photo), extraction job, review/edit, validation, learned names, manual quick-add (bakery, Turkish supermarket per-kg), token/cost log, image retention job | 4-5 |
-| **2 In-store** | Barcode scan (ZXing), shelf photo, confirm, OFF cache, "usual vs now" feedback, large-button UI, offline outbox, service worker | 4-5 |
+| **2 In-store** (built, not yet tried in a shop) | Barcode scan (ZXing), shelf photo, confirm, OFF cache, "usual vs now" feedback, large-button UI, offline outbox, service worker | 4-5 |
 | **3 Analysis** | Top products, per category and store, monthly view vs EUR 400, trend, charts | 2 |
 | **4 Cupboard** | Scan to add stock, linked to last price and store | 1-1.5 |
 | **5 Deals radar and comparison** | Weekly folders of Lidl, Plus, Jumbo (Aldi optional) into `flyer_offers`, matched to what you buy, alerts for large savings; then per-product/basket comparison with identical vs substitute savings | 5-7 |
@@ -140,3 +140,24 @@ where SQL can decide, per-task model setting. To be measured from the logged tok
 - Only the worker container talks to the Claude API; the app container never does.
 - Not yet exercised against the real API: the prompt and the request shape are covered by tests with a stub client only.
   Expect one round of prompt tuning after the first real receipts (the raw output is in `extractions.raw_json`).
+
+## Phase 2 as built (deviations and findings)
+
+- Barcode scanning uses the browser's BarcodeDetector when present and the vendored `@zxing/library` 0.21.3 otherwise
+  (the pure-JavaScript build: no WebAssembly, so no CSP exception is needed on Safari). The file was checked byte for
+  byte against the npm tarball; `tests/test_pwa.py` fails if it changes. Typing the number always works.
+- Every capture goes through an IndexedDB outbox, also when online, so a flaky connection never loses one. Uploads are
+  idempotent on a client-generated id. The scan page carries no personal data or CSRF token (the outbox fetches a fresh
+  token from `/api/csrf` per upload), which lets the service worker keep it for offline use.
+- `/sw.js` and `/manifest.webmanifest` are the only extra public routes (deny-by-default test updated). The service
+  worker only handles the scan page and `/static/`, never API calls.
+- Open Food Facts answers an unknown barcode with HTTP 200 and `status: 0` (not 404); checked against the real API.
+  Malformed answers are never cached as "not found". Lookups run in the worker only.
+- Receipts and shelf labels share one `price_observations` table; "usual price" is the median of the last five
+  receipt prices, shelf sightings only stand in when there is no receipt yet. Comparisons use per kg/l when both sides
+  have it, otherwise per pack.
+- The shelf label name leads over the Open Food Facts name (short, what you see in the shop); the latter is a fallback
+  and a second chance to recognise a product you already have.
+- Not verified: the camera and scanner on a real iPhone (no device here), the real Claude call for shelf labels
+  (prompt `shelf_v1`, stub-tested only), and the offline flow end to end on a phone. Expect one round of tuning after the
+  first shop visit.

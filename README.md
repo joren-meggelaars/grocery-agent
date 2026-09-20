@@ -5,8 +5,9 @@ monthly overview, and deal alerts from weekly folders. Runs on SRV-DOC-01 next t
 Clothing Advisor. **Not exposed publicly**: the only way in is Tailscale Serve.
 
 Status: **Phase 0** (foundations: login, sessions, CSRF, security headers, deny-by-default routing, Postgres,
-migrations, backups) and **Phase 1** (receipts: upload, reading with Claude, review and correct, validation,
-learned product names, quick add for the bakery and the Turkish supermarket). The full plan is in
+migrations, backups), **Phase 1** (receipts: upload, reading with Claude, review and correct, validation,
+learned product names, quick add for the bakery and the Turkish supermarket) and **Phase 2** (in the shop: scan a
+barcode, photograph the shelf label, instant comparison with what you usually pay, offline queue). The full plan is in
 [docs/PLAN.md](docs/PLAN.md).
 
 ## Deploy on SRV-DOC-01
@@ -38,6 +39,8 @@ nano .env
 | `TS_ALLOWED_LOGINS` | Tailscale login(s) allowed in. |
 | `TS_TRUSTED_PROXY_IPS` | Only this peer may supply the identity header. Keep `172.30.90.1/32` (the `web` network gateway in `docker-compose.yml`). |
 | `ANTHROPIC_API_KEY` | Key for reading receipts. Create a dedicated one in the Anthropic Console with a monthly limit of about EUR 5. Without it receipts fail with a message saying so. |
+| `LLM_MODEL_SHELF` / `LLM_EFFORT_SHELF` | Model and effort for shelf labels (default Sonnet 5, effort low). Labels are simple, so Haiku 4.5 may be enough later: compare readings in the `extractions` table first. |
+| `OFF_USER_AGENT` | Sent to Open Food Facts, which asks for an identifier with a contact, for example `GroceryAgent/0.1 (you@example.com)`. |
 | `LLM_MONTHLY_BUDGET_EUR` | New receipts are not read once the estimated spend this month reaches this (banner at 80%). Default 5. |
 
 ```bash
@@ -105,6 +108,36 @@ curl -m 3 http://10.0.100.8:8090/healthz
 docker compose exec db psql -U grocery -d grocery   -c "select id, model, input_tokens, output_tokens, round(cost_est_eur::numeric, 4) as eur, parsed_ok, error from extractions order by id desc limit 10;"
 ```
 
+## In the shop (Phase 2, iPhone)
+
+**One-time setup** (do this on wifi, before you go):
+1. Open `https://<vm-name>.<tailnet>.ts.net:8443/capture` in **Safari** and sign in.
+2. Share button, then **Add to Home Screen**. Always open the app from that icon: iOS may delete the offline queue of
+   a plain Safari tab after a week without use, but not of an installed app.
+3. Open the app once while online, and allow the camera when asked. This also saves the scan page for offline use.
+
+**Per product:**
+1. Pick the store (it remembers the last one).
+2. **Scan barcode** (or type the number; a wrong check digit is flagged). No barcode, for example on fresh produce, is fine.
+3. **Take photo of the price label** and press **Save**.
+4. With a connection you land on the confirm screen a few seconds later: name, price, price per kg or l, promotion,
+   validity, all prefilled from the label (and Open Food Facts for the product name). Correct what is wrong, **Save**.
+   You then see what you usually pay for this product and where it was cheaper.
+5. **Scan next.** Untick "Review right after saving" to scan a whole aisle first and review from *To review* later.
+
+**Without signal:** the capture is stored on the phone and the counter at the top shows how many wait. They upload by
+themselves when you open the app again with a connection (iOS cannot upload in the background). The label is read
+after uploading, so review offline captures later from *To review*. If the counter says *Sign in to upload*, your session
+expired: sign in and open the scan page again.
+
+**What gets compared:** the same product, identified by its barcode or by the name you gave it (the name you type is
+matched against your receipt products, so shelf prices and receipts share one history). Products from different
+brands, such as Lidl's own brand versus a brand name, are not "the same product"; that comparison arrives with the deals
+radar in Phase 5.
+
+Open Food Facts data is used under the ODbL licence (attribution is shown on the confirm screen). Every barcode you
+scan is sent to Open Food Facts once and cached afterwards, and only from the worker container.
+
 ## Operations
 
 ```bash
@@ -143,6 +176,8 @@ Copy dumps off the VM now and then; a backup that lives only on the same disk is
 | Everything is `403 Forbidden` | Identity gate. Look for `tailscale identity rejected` / `ignoring Tailscale-User-Login header from untrusted peer X` in the logs: fix `TS_TRUSTED_PROXY_IPS` or `TS_ALLOWED_LOGINS`. Temporary escape hatch: `TS_IDENTITY_MODE=off`. |
 | `Cross-origin request rejected` | The Origin check refused a POST. The log line `rejected cross-origin` shows the Origin and Sec-Fetch-Site that arrived; the Origin host must be in `ALLOWED_HOSTS`. |
 | Receipt says `ANTHROPIC_API_KEY is not set` | Add the key to `.env`, run `docker compose up -d`, open the receipt and press *Try again*. |
+| Camera does not start | Safari needs HTTPS (Tailscale Serve gives that) and camera permission: iPhone Settings, Safari (or the installed app), Camera. Typing the number always works. |
+| Scan page blank offline | Open `/capture` once while online from the home-screen icon so the page is saved. |
 | Receipt stays on *Reading...* | The worker is not running or cannot reach the API: `docker compose logs --tail 50 worker`. |
 | `Monthly API budget reached` | Raise `LLM_MONTHLY_BUDGET_EUR` in `.env`, `docker compose up -d`, then *Try again*. |
 | `Too many attempts` | Login lockout (5 failures, then 1 to 15 minutes). Wait, or run the `unlock` command above. |
@@ -152,7 +187,7 @@ Copy dumps off the VM now and then; a backup that lives only on the same disk is
 
 ```bash
 uv sync
-uv run pytest                                                   # 219 tests, SQLite, no Docker or API key needed
+uv run pytest                                                   # 350 tests, SQLite, no Docker or API key needed
 DATABASE_URL=sqlite:///./dev.db COOKIE_SECURE=false uv run alembic upgrade head
 DATABASE_URL=sqlite:///./dev.db COOKIE_SECURE=false uv run uvicorn --factory grocery.main:create_app --port 8000
 ```

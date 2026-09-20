@@ -21,6 +21,31 @@ class ExtractedLine(BaseModel):
     category: str | None
 
 
+PromoKind = Literal["none", "percentage", "multi_buy", "x_for_y", "fixed_price", "bonus_card", "other"]
+UnitPer = Literal["kg", "l", "pcs", "100g", "100ml"]
+
+
+class ShelfLabelExtraction(BaseModel):
+    """A supermarket shelf price label (schapkaartje)."""
+
+    product_name: str | None
+    brand: str | None
+    price_cents: int | None = Field(description="Price of one pack on the shelf now, in cents")
+    regular_price_cents: int | None = Field(description="The normal price when a promotion is shown, in cents")
+    effective_price_cents: int | None = Field(
+        description="Price per item once the promotion conditions are met, in cents; null without a promotion"
+    )
+    unit_price_cents: int | None = Field(description="The printed price per kg / l / piece, in cents")
+    unit_price_per: UnitPer | None
+    promo_kind: PromoKind
+    promo_text: str | None = Field(description="The promotion exactly as printed, e.g. '2 voor 5.00'")
+    requires_card: bool = Field(description="True if the price needs a loyalty card or app")
+    valid_from: str | None = Field(description="YYYY-MM-DD")
+    valid_until: str | None = Field(description="YYYY-MM-DD")
+    ean_on_label: str | None = Field(description="Barcode digits printed on the label, if any")
+    legibility_notes: str | None
+
+
 class ReceiptExtraction(BaseModel):
     store_chain: Chain
     store_name_printed: str | None

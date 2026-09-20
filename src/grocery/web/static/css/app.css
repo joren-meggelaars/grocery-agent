@@ -157,3 +157,17 @@ label input, label select { margin-top: 4px; }
 .status-failed { background: var(--danger-fg); color: var(--danger-bg); }
 .status-confirmed { background: #1a7f37; color: #fff; }
 .status-extracting { background: var(--muted); color: var(--bg); }
+
+/* --- in-store capture --- */
+.topbar { display: flex; justify-content: space-between; gap: 12px; }
+.btn.big, select.big, input.big { min-height: 72px; font-size: 1.15rem; }
+input.big { width: 100%; padding: 10px 14px; border: 2px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--fg); font: inherit; }
+.file-btn { display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.scanner video { display: block; width: 100%; max-height: 50vh; object-fit: cover; border: 2px solid var(--border); border-radius: 12px; background: #000; }
+.outbox { display: flex; justify-content: space-between; gap: 10px; font-weight: 600; }
+.price-line { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 0; }
+.price { font-size: 2.2rem; font-weight: 800; }
+.feedback.verdict-cheaper { border-color: #1a7f37; }
+.feedback.verdict-pricier { border-color: var(--danger-fg); }
+.feedback ul { margin: 6px 0 0; padding-left: 20px; }
+.btn.primary.big { font-size: 1.3rem; }

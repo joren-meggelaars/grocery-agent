@@ -38,6 +38,17 @@ class Settings(BaseSettings):
     # Hard stop for new extractions; estimates come from logged token usage.
     llm_monthly_budget_eur: float = 5.0
     usd_to_eur: float = 0.92
+    # Shelf labels are short and simple: a cheaper effort setting is enough, model is tunable per task.
+    llm_model_shelf: str = "claude-sonnet-5"
+    llm_effort_shelf: Literal["low", "medium", "high"] = "low"
+    label_max_edge: int = 1400  # shelf label photos are downscaled to this many pixels on the long edge
+
+    # --- Open Food Facts (barcode lookups, cached) ---
+    off_user_agent: str = "GroceryAgent/0.1 (self-hosted)"
+    off_found_ttl_days: int = 30
+    off_missing_ttl_days: int = 7
+
+    timezone: str = "Europe/Amsterdam"  # for "today" when a capture has no explicit date
 
     # --- Uploads and transient image storage ---
     files_dir: Path = Path("./data/files")

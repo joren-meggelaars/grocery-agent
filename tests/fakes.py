@@ -65,3 +65,60 @@ class FakeReader:
 
 def failed(error, retryable=False) -> ReadResult:
     return ReadResult(parsed=None, raw=None, model="claude-sonnet-5", error=error, retryable=retryable)
+
+
+# --- Phase 2: shelf labels and Open Food Facts ------------------------------
+
+import json  # noqa: E402
+
+from grocery.llm.schemas import ShelfLabelExtraction  # noqa: E402
+
+
+def shelf_label(**kw) -> ShelfLabelExtraction:
+    base = dict(
+        product_name="Halfvolle melk", brand=None, price_cents=129, regular_price_cents=None,
+        effective_price_cents=None, unit_price_cents=129, unit_price_per="l", promo_kind="none",
+        promo_text=None, requires_card=False, valid_from=None, valid_until=None, ean_on_label=None,
+        legibility_notes=None,
+    )
+    base.update(kw)
+    return ShelfLabelExtraction(**base)
+
+
+class FakeShelfReader(FakeReader):
+    prompt_version = "shelf_test"
+
+
+def ean13(body12: str) -> str:
+    total = sum(int(d) * (3 if i % 2 else 1) for i, d in enumerate(body12))
+    return body12 + str((10 - total % 10) % 10)
+
+
+def off_found(name="Halfvolle melk", brand="Campina", quantity="1 L"):
+    calls = []
+
+    def fetch(ean, ua):
+        calls.append((ean, ua))
+        body = {"status": 1, "product": {"product_name": name, "brands": brand, "quantity": quantity}}
+        return 200, json.dumps(body).encode()
+
+    fetch.calls = calls
+    return fetch
+
+
+def off_missing():
+    calls = []
+
+    def fetch(ean, ua):
+        calls.append(ean)
+        return 404, b'{"status": 0, "status_verbose": "product not found"}'
+
+    fetch.calls = calls
+    return fetch
+
+
+def off_down():
+    def fetch(ean, ua):
+        raise OSError("network unreachable")
+
+    return fetch

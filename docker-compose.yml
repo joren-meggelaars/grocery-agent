@@ -13,6 +13,9 @@ x-app-env: &app-env
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   LLM_MODEL: ${LLM_MODEL:-claude-sonnet-5}
   LLM_EFFORT: ${LLM_EFFORT:-medium}
+  LLM_MODEL_SHELF: ${LLM_MODEL_SHELF:-claude-sonnet-5}
+  LLM_EFFORT_SHELF: ${LLM_EFFORT_SHELF:-low}
+  OFF_USER_AGENT: ${OFF_USER_AGENT:-GroceryAgent/0.1 (self-hosted)}
   LLM_MONTHLY_BUDGET_EUR: ${LLM_MONTHLY_BUDGET_EUR:-5}
   FILES_DIR: /data/files
 

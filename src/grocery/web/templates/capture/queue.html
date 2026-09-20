@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Captures - Grocery Agent{% endblock %}
+{% block content %}
+<p class="topbar"><a href="/">&larr; Home</a> <a href="/capture">Scan</a></p>
+<h1>Captures</h1>
+<ul class="list spaced">
+  {% for c in captures %}
+  <li>
+    <a class="card row-link" href="/capture/{{ c.id }}">
+      <span>
+        <strong>{{ c.product_name or c.off_name or ("Barcode " ~ c.ean if c.ean else "Price label") }}</strong>
+        <span class="muted">{{ c.store.name if c.store }} &middot; {{ c.captured_at.strftime("%Y-%m-%d %H:%M") }} UTC</span>
+      </span>
+      <span>
+        {% if c.price_cents is not none %}EUR {{ fmt(c.effective_price_cents if c.effective_price_cents is not none else c.price_cents) }}{% endif %}
+        <span class="badge status-{{ c.status }}">{{ labels[c.status] }}</span>
+      </span>
+    </a>
+  </li>
+  {% else %}
+  <li class="muted">Nothing captured yet.</li>
+  {% endfor %}
+</ul>
+{% endblock %}

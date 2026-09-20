@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Capture - Grocery Agent{% endblock %}
+{% block content %}
+<p class="topbar"><a href="/capture/queue">&larr; Captures</a> <a href="/capture">Scan</a></p>
+<h1>
+  {{ capture.product_name or capture.off_name or "Price label" }}
+  <span class="badge status-{{ capture.status }}">{{ labels[capture.status] }}</span>
+</h1>
+
+{% if capture.status == "extracting" %}
+  <noscript><meta http-equiv="refresh" content="4"></noscript>
+  <p class="card" data-poll-url="/capture/{{ capture.id }}/status" data-poll-status="extracting" role="status">
+    Reading the label. This takes a few seconds; the page updates by itself.
+  </p>
+  <script src="{{ static_url('js/poll.js') }}" defer></script>
+
+{% elif capture.status == "failed" and not manual and not errors %}
+  <p class="alert" role="alert">{{ capture.error or "The label could not be read." }}</p>
+  <form method="post" action="/capture/{{ capture.id }}/retry" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn big primary">Try again</button>
+  </form>
+  <a class="btn big spaced" href="/capture/{{ capture.id }}?manual=1">Enter it by hand</a>
+
+{% elif capture.status == "confirmed" and not manual and not errors %}
+  <div class="card">
+    <p class="price-line">
+      <span class="price">EUR {{ fmt(capture.effective_price_cents if capture.effective_price_cents is not none else capture.price_cents) }}</span>
+      <span class="muted">{{ capture.store.name if capture.store }}</span>
+    </p>
+    {% if capture.promo_text %}<p><strong>{{ capture.promo_text }}</strong>{% if capture.requires_card %} (card or app needed){% endif %}
+      {% if capture.valid_until %}<span class="muted"> until {{ capture.valid_until.isoformat() }}</span>{% endif %}</p>{% endif %}
+    {% if capture.unit_price_cents is not none %}<p class="muted">EUR {{ fmt(capture.unit_price_cents) }} per {{ capture.unit_basis }}</p>{% endif %}
+  </div>
+
+  {% if feedback %}
+  <div class="card feedback verdict-{{ feedback.verdict }}" role="status">
+    {% if feedback.verdict == "first" %}
+      <p><strong>First price recorded for this product.</strong> Add a receipt or another price to compare.</p>
+    {% else %}
+      <p><strong>
+        {% if feedback.verdict == "cheaper" %}Cheaper than usual{% elif feedback.verdict == "pricier" %}More expensive than usual{% else %}About your usual price{% endif %}
+        ({{ "%+.0f"|format(feedback.pct_vs_usual * 100) }}%)
+      </strong></p>
+      <p>You usually pay EUR {{ fmt(feedback.usual) }} {{ basis_label[feedback.basis] }}
+        <span class="muted">(median of {{ feedback.usual_count }})</span>.
+        {% if feedback.last_paid %}<br>Last: EUR {{ fmt(feedback.last_paid.value) }} at {{ feedback.last_paid.store }} on {{ feedback.last_paid.observed_on.isoformat() }}
+          <span class="muted">({{ feedback.last_paid.source }})</span>{% endif %}</p>
+    {% endif %}
+    {% if feedback.cheaper_elsewhere %}
+      <p><strong>Cheaper elsewhere</strong></p>
+      <ul>
+        {% for s in feedback.cheaper_elsewhere %}
+        <li>{{ s.store }}: EUR {{ fmt(s.value) }} {{ basis_label[feedback.basis] }}
+          <span class="muted">({{ s.source }}, {{ s.observed_on.isoformat() }}{% if s.promo %}, promotion{% endif %})</span></li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <nav class="stack spaced">
+    <a class="btn big primary" href="/capture">Scan next</a>
+    <a class="btn" href="/capture/{{ capture.id }}?manual=1">Edit</a>
+    <form method="post" action="/capture/{{ capture.id }}/delete" class="stack" data-confirm="Delete this capture?">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn danger">Delete</button>
+    </form>
+  </nav>
+
+{% else %}
+  {% for e in errors %}<p class="alert" role="alert">{{ e }}</p>{% endfor %}
+  {% if capture.status == "failed" %}<p class="alert">{{ capture.error }}</p>{% endif %}
+  {% if notes %}<p class="card"><strong>Note from the reader:</strong> {{ notes }}</p>{% endif %}
+  {% if capture.off_name %}<p class="muted">Open Food Facts: {{ capture.off_name }}</p>{% endif %}
+  {% if has_photo %}
+  <details class="card" open>
+    <summary>Price label photo</summary>
+    <img class="receipt-img" src="/capture/{{ capture.id }}/image" alt="Price label">
+  </details>
+  {% endif %}
+
+  <form method="post" action="/capture/{{ capture.id }}/confirm" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+    <label>Store
+      <select name="store" class="big">
+        {% for s in stores %}<option value="{{ s.chain }}" {{ "selected" if s.chain == values.store }}>{{ s.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Barcode
+      <input type="text" name="ean" class="big" inputmode="numeric" value="{{ values.ean }}" autocomplete="off">
+    </label>
+    <label>Product
+      <input type="text" name="product" class="big" list="products" value="{{ values.product }}" maxlength="200" autocomplete="off">
+    </label>
+    <label>Category
+      <select name="category" class="big">
+        <option value="">-</option>
+        {% for c in categories %}<option value="{{ c.id }}" {{ "selected" if c.id == values.category_id }}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+
+    <label>Shelf price (EUR)
+      <input type="text" name="price" class="big" inputmode="decimal" value="{{ values.price }}">
+    </label>
+    <div class="grid2">
+      <label>Per unit (EUR)
+        <input type="text" name="unit_price" class="big" inputmode="decimal" value="{{ values.unit_price }}">
+      </label>
+      <label>Per
+        <select name="unit_basis" class="big">
+          <option value="kg" {{ "selected" if values.unit_basis == "kg" }}>kg</option>
+          <option value="l" {{ "selected" if values.unit_basis == "l" }}>l</option>
+        </select>
+      </label>
+    </div>
+
+    <label>Promotion
+      <select name="promo_kind" class="big">
+        <option value="">None</option>
+        {% for k, t in [("percentage", "Percentage off"), ("multi_buy", "Multi-buy (2nd half price, 1+1)"), ("x_for_y", "x for y (2 for 5.00)"), ("fixed_price", "New fixed price"), ("bonus_card", "Card / app price"), ("other", "Other")] %}
+        <option value="{{ k }}" {{ "selected" if values.promo_kind == k }}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Promotion text
+      <input type="text" name="promo_text" class="big" value="{{ values.promo_text }}" maxlength="200">
+    </label>
+    <label>Price per item with the promotion (EUR)
+      <input type="text" name="effective_price" class="big" inputmode="decimal" value="{{ values.effective_price }}">
+    </label>
+    <label class="check"><input type="checkbox" name="requires_card" {{ "checked" if values.requires_card }}> Needs a loyalty card or app</label>
+    <div class="grid2">
+      <label>Valid from<input type="date" name="valid_from" value="{{ values.valid_from }}"></label>
+      <label>Valid until<input type="date" name="valid_until" value="{{ values.valid_until }}"></label>
+    </div>
+
+    <button type="submit" class="btn big primary">Save</button>
+  </form>
+  <datalist id="products">{% for name in product_names %}<option value="{{ name }}">{% endfor %}</datalist>
+
+  <form method="post" action="/capture/{{ capture.id }}/delete" class="stack spaced" data-confirm="Delete this capture?">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" class="btn danger">Discard</button>
+  </form>
+{% endif %}
+
+{% if capture.off_name or (capture.ean and capture.status != "extracting") %}
+<p class="muted">Product data: <a href="https://world.openfoodfacts.org/">Open Food Facts</a> (ODbL).</p>
+{% endif %}
+{% endblock %}
