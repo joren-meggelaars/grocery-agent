@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Account - Grocery Agent{% endblock %}
+{% block content %}
+<p><a href="/">&larr; Home</a></p>
+<h1>Account</h1>
+<p class="muted">
+  {{ user.username }}
+  {% if ts_mode != "off" %} &middot; Tailscale identity: {{ ts_login or "none" }} ({{ ts_mode }}){% endif %}
+</p>
+
+<h2>Signed-in devices</h2>
+<ul class="list">
+  {% for s in sessions %}
+  <li class="card">
+    <strong>{{ s.user_agent or "Unknown device" }}</strong>
+    {% if s.id == current_id %}<span class="badge">this device</span>{% endif %}
+    <div class="muted">
+      Signed in {{ s.created_at.strftime("%Y-%m-%d %H:%M") }} UTC &middot;
+      last seen {{ s.last_seen.strftime("%Y-%m-%d %H:%M") }} UTC
+    </div>
+    {% if s.id != current_id %}
+    <form method="post" action="/account/sessions/{{ s.id }}/revoke">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn">Sign out this device</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+
+{% if sessions|length > 1 %}
+<form method="post" action="/account/sessions/revoke-others">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="btn">Sign out all other devices</button>
+</form>
+{% endif %}
+{% endblock %}

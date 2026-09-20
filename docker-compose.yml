@@ -1,0 +1,66 @@
+name: grocery
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: grocery
+      POSTGRES_DB: grocery
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # Postgres 18 keeps its data under /var/lib/postgresql (versioned subdirectory).
+      - pgdata:/var/lib/postgresql
+    networks: [backend]        # internal network only: no ports, no internet
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grocery -d grocery"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: &logging
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      DATABASE_URL: postgresql+psycopg://grocery:${POSTGRES_PASSWORD}@db:5432/grocery
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?set ALLOWED_HOSTS in .env}
+      TS_IDENTITY_MODE: ${TS_IDENTITY_MODE:-require}
+      TS_ALLOWED_LOGINS: ${TS_ALLOWED_LOGINS:-}
+      TS_TRUSTED_PROXY_IPS: ${TS_TRUSTED_PROXY_IPS:-172.30.90.1/32}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      SESSION_IDLE_DAYS: ${SESSION_IDLE_DAYS:-30}
+      SESSION_ABSOLUTE_DAYS: ${SESSION_ABSOLUTE_DAYS:-90}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      # Loopback only: `tailscale serve` on the host is the only way in.
+      # 8090 avoids TrendWatcher (:8000) and Clothing Advisor (:8080) on the same VM.
+      - "127.0.0.1:8090:8000"
+    networks: [web, backend]
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    pids_limit: 200
+    logging: *logging
+
+networks:
+  # `web` has a fixed subnet so the gateway address is known: that is the source
+  # address the app sees for traffic arriving via the published loopback port, and
+  # it must match TS_TRUSTED_PROXY_IPS. Do not put other containers on this network.
+  web:
+    ipam:
+      config:
+        - subnet: 172.30.90.0/24
+          gateway: 172.30.90.1
+  backend:
+    internal: true
+
+volumes:
+  pgdata:
