@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 
 OFF_HOST = "world.openfoodfacts.org"
 MAX_BYTES = 256 * 1024
+MAX_DISPLAY = 300  # the off_name columns hold 300 characters; PostgreSQL enforces that, SQLite does not
 FIELDS = "product_name,brands,quantity,generic_name"
 
 # (ean, user_agent) -> (http status, body bytes); replaced in tests
@@ -42,7 +43,7 @@ class OffProduct:
             if part.casefold() not in seen:
                 seen.add(part.casefold())
                 out.append(part)
-        return ", ".join(out) or None
+        return ", ".join(out)[:MAX_DISPLAY] or None
 
 
 def http_fetch(ean: str, user_agent: str, timeout: float = 5.0) -> tuple[int, bytes]:

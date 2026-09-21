@@ -112,3 +112,10 @@ def test_display_skips_duplicates():
 def test_http_fetch_refuses_non_digits():
     with pytest.raises(ValueError):
         http_fetch("12/../3", "ua")
+
+
+def test_the_display_text_fits_the_database_column():
+    """name, brand and quantity may each be 200 characters; the columns that store the result hold 300."""
+    long = OffProduct("N" * 200, "B" * 200, "Q" * 200)
+    assert len(long.display) == 300
+    assert OffProduct("Melk", "Campina", "1 L").display == "Melk, Campina, 1 L"  # normal values are untouched

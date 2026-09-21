@@ -1,5 +1,9 @@
+import os
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 
 from grocery.cli import create_user
 from grocery.config import Settings
@@ -10,12 +14,32 @@ from grocery.refdata import seed
 PASSWORD = "correct horse battery staple"
 PEER = ("172.30.90.1", 50000)  # the docker bridge gateway: what Tailscale Serve looks like
 
+# Set TEST_DATABASE_URL (e.g. postgresql+psycopg://postgres@127.0.0.1:5432/grocery_test) to run the whole suite on
+# PostgreSQL instead of SQLite. Every test gets its own schema, dropped afterwards, so tests stay isolated.
+TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL")
+
 
 @pytest.fixture
-def make_settings(tmp_path):
+def pg_url():
+    if not TEST_DATABASE_URL:
+        yield None
+        return
+    schema = "t_" + uuid.uuid4().hex[:12]
+    admin = create_engine(TEST_DATABASE_URL, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+    joiner = "&" if "?" in TEST_DATABASE_URL else "?"
+    yield f"{TEST_DATABASE_URL}{joiner}options=-csearch_path%3D{schema}"
+    with admin.connect() as conn:
+        conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+    admin.dispose()
+
+
+@pytest.fixture
+def make_settings(tmp_path, pg_url):
     def _make(**overrides) -> Settings:
         values = dict(
-            database_url=f"sqlite:///{tmp_path / 'test.db'}",
+            database_url=pg_url or f"sqlite:///{tmp_path / 'test.db'}",
             files_dir=tmp_path / "files",
             allowed_hosts=["testserver"],
             cookie_secure=True,

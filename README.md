@@ -230,10 +230,28 @@ Copy dumps off the VM now and then; a backup that lives only on the same disk is
 
 ```bash
 uv sync
-uv run pytest                                                   # 350 tests, SQLite, no Docker or API key needed
+uv run pytest                                                   # ~500 tests on SQLite, no Docker or API key needed
 DATABASE_URL=sqlite:///./dev.db COOKIE_SECURE=false uv run alembic upgrade head
 DATABASE_URL=sqlite:///./dev.db COOKIE_SECURE=false uv run uvicorn --factory grocery.main:create_app --port 8000
 ```
+
+### Tests on PostgreSQL
+
+SQLite hides things production has: enforced string lengths, JSONB columns and `FOR UPDATE SKIP LOCKED`. The whole
+suite (and a migration test) can run on PostgreSQL: set `TEST_DATABASE_URL` and every test gets its own schema.
+
+```bash
+# with Docker
+docker run -d --name grocery-pg -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=grocery_test -p 5433:5432 postgres:18
+TEST_DATABASE_URL=postgresql+psycopg://postgres@127.0.0.1:5433/grocery_test uv run pytest
+
+# without Docker (embedded PostgreSQL; the tool needs Python 3.12 or older, the project keeps its own Python)
+uv run --no-project --python 3.12 --with pgserver python -c "import pgserver; print(pgserver.get_server('./pgdata', cleanup_mode=None).get_uri())"
+# create a database on the printed host and port, then set TEST_DATABASE_URL to it
+```
+
+Last full run: 508 passed on PostgreSQL 16.2. Docker Desktop on Windows needs WSL 2 (`wsl --install` in an elevated
+PowerShell, then restart); the container build itself is only verified on the VM.
 
 ## Security model in one paragraph
 
