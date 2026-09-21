@@ -308,7 +308,8 @@ def test_what_i_buy_most_shows_the_cheapest_alternative_next_to_the_last_purchas
 def test_what_i_buy_most_says_so_when_there_is_no_alternative(client, db):
     login(client)
     make_receipt(db, "plus", today_local(client), [("item", 249, "Zuivel & eieren", "Kaas")])
-    assert "none seen at another store" in client.get("/regulars?period=all").text
+    page = client.get("/regulars?period=all").text
+    assert "Cheapest alternative:</strong> N/A" in page and "none seen" not in page
 
 
 def test_the_scan_result_names_the_cheapest_alternative_even_when_nothing_is_cheaper(client, db):
