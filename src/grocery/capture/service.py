@@ -19,6 +19,7 @@ from grocery.llm.budget import budget_state
 from grocery.llm.client import ReadResult, ShelfReader
 from grocery.llm.pricing import estimate_cost_eur
 from grocery.llm.schemas import ShelfLabelExtraction
+from grocery.money import format_cents
 from grocery.prices.observations import record_shelf
 from grocery.products.ean import clean_ean
 from grocery.products.matching import MatchIndex
@@ -202,6 +203,15 @@ def _apply(
     capture.unit_price_cents, capture.unit_basis = normalise_unit_price(label.unit_price_cents, label.unit_price_per)
     capture.promo_kind = label.promo_kind if label.promo_kind != "none" else None
     capture.promo_text = (label.promo_text or "")[:200] or None
+    if (
+        capture.promo_kind is None
+        and label.regular_price_cents
+        and label.price_cents
+        and label.price_cents < label.regular_price_cents
+    ):
+        # A price below the crossed-out "van" price is a promotion, whatever the model called it.
+        capture.promo_kind = "fixed_price"
+        capture.promo_text = capture.promo_text or f"Was EUR {format_cents(label.regular_price_cents)}"
     capture.requires_card = label.requires_card or label.promo_kind == "bonus_card"
     capture.valid_from = _parse_date(label.valid_from)
     capture.valid_until = _parse_date(label.valid_until)

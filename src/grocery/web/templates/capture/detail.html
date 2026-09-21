@@ -148,6 +148,14 @@
   </form>
 {% endif %}
 
+{% if raw %}
+<details class="card spaced">
+  <summary>What the reader returned</summary>
+  <p class="muted">The raw answer of the model, before you corrected anything. Useful when a reading was wrong.</p>
+  <pre class="raw">{{ raw|tojson(indent=2) }}</pre>
+</details>
+{% endif %}
+
 {% if capture.off_name or (capture.ean and capture.status != "extracting") %}
 <p class="muted">Product data: <a href="https://world.openfoodfacts.org/">Open Food Facts</a> (ODbL).</p>
 {% endif %}

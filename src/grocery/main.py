@@ -14,7 +14,7 @@ from grocery.capture import routes as capture_routes
 from grocery.cupboard import routes as cupboard_routes
 from grocery.receipts import routes as receipt_routes
 from grocery.web import routes_auth, routes_home, routes_pwa
-from grocery.web.templating import STATIC_DIR
+from grocery.web.templating import STATIC_DIR, templates
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -41,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         dependencies=[Depends(require_auth), Depends(csrf_protect)],
     )
     app.state.settings = settings
+    templates.env.globals["app_timezone"] = settings.timezone
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
 

@@ -9,7 +9,7 @@
     <a class="card row-link" href="/capture/{{ c.id }}">
       <span>
         <strong>{{ c.product_name or c.off_name or ("Barcode " ~ c.ean if c.ean else "Price label") }}</strong>
-        <span class="muted">{{ c.store.name if c.store }} &middot; {{ c.captured_at.strftime("%Y-%m-%d %H:%M") }} UTC</span>
+        <span class="muted">{{ c.store.name if c.store }} &middot; {{ c.captured_at|localtime("%d %b %H:%M") }}</span>
       </span>
       <span>
         {% if c.price_cents is not none %}EUR {{ fmt(c.effective_price_cents if c.effective_price_cents is not none else c.price_cents) }}{% endif %}

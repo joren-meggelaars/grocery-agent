@@ -130,6 +130,7 @@ def _detail(request, principal, db, capture, values=None, errors=None, status=20
             "feedback": _feedback(db, request, capture), "basis_label": BASIS_LABEL,
             "notes": (capture.extraction.raw_json or {}).get("legibility_notes") if capture.extraction else None,
             "has_photo": bool(capture.file and capture.file.path),
+            "raw": capture.extraction.raw_json if capture.extraction and capture.status != "extracting" else None,
             "on_cupboard": on_cupboard(db, capture.product_id),
             "settings": settings,
         },

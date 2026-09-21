@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Quick add - Grocery Agent{% endblock %}
 {% block content %}
-<p><a href="/receipts">&larr; Receipts</a></p>
+<p class="crumbs"><a href="/receipts">&larr; Receipts</a></p>
 <h1>Quick add</h1>
 <p class="muted">For purchases without a receipt photo, such as the bakery or a weighed purchase at the Turkish supermarket.</p>
 {% for e in errors %}<p class="alert" role="alert">{{ e }}</p>{% endfor %}
-<form method="post" action="/receipts/quick" class="stack">
+<form method="post" action="/receipts/quick" class="stack" id="quick-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <label for="store">Store</label>
   <select id="store" name="store">
@@ -16,13 +16,22 @@
   <label for="description">What (optional)</label>
   <input id="description" name="description" type="text" value="{{ values.description }}"
          placeholder="{{ 'Kip' if values.store == 'turkish' else 'Brood' if values.store == 'bakery' else 'Groceries' }}">
-  <label for="total">Amount paid (EUR)</label>
-  <input id="total" name="total" type="text" inputmode="decimal" value="{{ values.total }}" placeholder="3.95">
-  <p class="muted">Or for weighed goods, leave the amount empty and fill in weight and price per kg:</p>
-  <label for="weight">Weight (kg)</label>
-  <input id="weight" name="weight" type="text" inputmode="decimal" value="{{ values.weight }}" placeholder="0.874">
-  <label for="price_per_kg">Price per kg (EUR)</label>
-  <input id="price_per_kg" name="price_per_kg" type="text" inputmode="decimal" value="{{ values.price_per_kg }}">
-  <button type="submit" class="btn primary">Save</button>
+
+  <h2>Weighed purchase <span class="muted">(optional)</span></h2>
+  <div class="grid2">
+    <label for="weight">Weight (kg)
+      <input id="weight" name="weight" type="text" inputmode="decimal" value="{{ values.weight }}" placeholder="0.874">
+    </label>
+    <label for="price_per_kg">Price per kg (EUR)
+      <input id="price_per_kg" name="price_per_kg" type="text" inputmode="decimal" value="{{ values.price_per_kg }}">
+    </label>
+  </div>
+
+  <label for="total">Amount paid (EUR)
+    <input id="total" name="total" type="text" inputmode="decimal" value="{{ values.total }}" placeholder="3.95">
+  </label>
+  <p class="muted" id="total-note">With a weight and a price per kg the amount is calculated for you; you can still change it.</p>
+  <button type="submit" class="btn primary big">Save</button>
 </form>
+<script src="{{ static_url('js/quick.js') }}" defer></script>
 {% endblock %}

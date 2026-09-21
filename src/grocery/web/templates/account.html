@@ -15,8 +15,8 @@
     <strong>{{ s.user_agent or "Unknown device" }}</strong>
     {% if s.id == current_id %}<span class="badge">this device</span>{% endif %}
     <div class="muted">
-      Signed in {{ s.created_at.strftime("%Y-%m-%d %H:%M") }} UTC &middot;
-      last seen {{ s.last_seen.strftime("%Y-%m-%d %H:%M") }} UTC
+      Signed in {{ s.created_at|localtime("%d %b %H:%M") }} &middot;
+      last seen {{ s.last_seen|localtime("%d %b %H:%M") }}
     </div>
     {% if s.id != current_id %}
     <form method="post" action="/account/sessions/{{ s.id }}/revoke">

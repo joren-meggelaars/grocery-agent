@@ -169,6 +169,7 @@ def _review_context(db: Session, receipt: Receipt, rows: list[dict], validation,
         notes=(receipt.extraction.raw_json or {}).get("legibility_notes") if receipt.extraction else None,
         blank=forms.blank_row("__i__"), fmt=format_cents, page_count=len(receipt.files),
         selected_store=receipt.store.chain if receipt.store else "other",
+        raw=receipt.extraction.raw_json if receipt.extraction else None,
         today=date.today().isoformat(),
     )
 

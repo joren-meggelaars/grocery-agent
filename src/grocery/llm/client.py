@@ -23,7 +23,7 @@ from grocery.refdata import CATEGORIES
 log = logging.getLogger(__name__)
 
 PROMPT_VERSION = "receipt_v1"  # kept for receipts; shelf labels have their own version below
-SHELF_PROMPT_VERSION = "shelf_v1"
+SHELF_PROMPT_VERSION = "shelf_v2"
 _PROMPTS = Path(__file__).parent / "prompts"
 MAX_OUTPUT_TOKENS = 16000
 
