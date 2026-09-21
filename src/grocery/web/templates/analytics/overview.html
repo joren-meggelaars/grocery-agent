@@ -2,7 +2,7 @@
 {% from "analytics/_charts.html" import column_chart, bar_chart %}
 {% block title %}Monthly overview - Grocery Agent{% endblock %}
 {% block content %}
-<p class="topbar"><a href="/">&larr; Home</a> <a href="/regulars">What I buy most</a></p>
+<p class="crumbs"><a href="/">&larr; Home</a> <a href="/regulars">What I buy most</a></p>
 
 <nav class="month-nav" aria-label="Month">
   <a class="btn" href="/overview?month={{ prev_month }}" aria-label="Previous month">&larr;</a>
@@ -14,9 +14,9 @@
   <p class="card">No saved receipts in {{ month.strftime("%B %Y") }} yet. <a href="/receipts/new">Add a receipt</a>.</p>
 {% endif %}
 
-<section class="card viz" aria-labelledby="hero-title">
-  <p id="hero-title" class="muted">Food spend</p>
-  <p class="hero">{{ eur(summary.food_cents) }}</p>
+<section class="hero-card" aria-labelledby="hero-title">
+  <p class="eyebrow" id="hero-title">Food spend</p>
+  <p class="figure">{{ eur(summary.food_cents) }}</p>
   <p class="muted">of {{ eur(reference.reference_cents) }} reference &middot; {{ (reference.used_pct * 100)|round|int }}%</p>
 
   <svg class="meter" viewBox="0 0 300 14" preserveAspectRatio="none" role="img"

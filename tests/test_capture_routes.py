@@ -275,9 +275,10 @@ def test_queue_page_and_home_badge(session, db):
     cid = new_read_capture(client, token, db)
     assert "Halfvolle melk" in client.get("/capture/queue").text
     home = client.get("/").text
-    assert "1 capture to review" in home and "Scan in store" in home
+    assert "1 to review" in home and "Scan in store" in home
     client.post(f"/capture/{cid}/confirm", data=form_data(client))
-    assert "to review" not in client.get("/").text
+    after = client.get("/").text
+    assert "Nothing to review" in after and "1 to review" not in after
 
 
 def test_anonymous_users_cannot_reach_capture_pages(client):

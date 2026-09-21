@@ -8,7 +8,14 @@ BARS = [3, 1, 2, 1, 4, 1, 1, 2, 3, 1, 2, 2, 1, 3, 1, 1, 2, 1, 4]  # alternating 
 
 
 def draw(size: int) -> Image.Image:
-    img = Image.new("RGB", (size, size), "#0b5cff")
+    # black in one corner, blue in the other, like the app's hero card
+    img = Image.new("RGB", (size, size))
+    px = img.load()
+    start, end = (7, 11, 20), (37, 99, 235)
+    for y in range(size):
+        for x in range(size):
+            t = (x + y) / (2 * (size - 1))
+            px[x, y] = tuple(round(a + (b - a) * t) for a, b in zip(start, end))
     d = ImageDraw.Draw(img)
     unit = size * 0.56 / sum(BARS)
     x, top, bottom = size * 0.22, size * 0.24, size * 0.76

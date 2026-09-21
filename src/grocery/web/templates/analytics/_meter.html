@@ -1,0 +1,7 @@
+{% macro meter(reference) %}
+<svg class="meter" viewBox="0 0 300 14" preserveAspectRatio="none" role="img"
+     aria-label="{{ (reference.used_pct * 100)|round|int }}% of the monthly reference used">
+  <rect class="viz-track" x="0" y="0" width="300" height="14" rx="7"/>
+  <rect class="viz-fill state-{{ reference.state }}" x="0" y="0" width="{{ [reference.used_pct * 100, 100]|min }}%" height="14" rx="7"/>
+</svg>
+{% endmacro %}

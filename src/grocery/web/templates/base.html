@@ -4,20 +4,85 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
   <title>{% block title %}Grocery Agent{% endblock %}</title>
   {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
-  <meta name="theme-color" content="#0b5cff">
+  <meta name="theme-color" content="#070b14">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Groceries">
 </head>
 <body>
-  <main>
-    {% block content %}{% endblock %}
+{% include "_icons.html" %}
+{% set path = request.url.path %}
+{% set here = "scan" if path == "/capture"
+   else "review" if path.startswith("/capture/")
+   else "add" if path in ["/receipts/new", "/receipts/quick"]
+   else "receipts" if path.startswith("/receipts")
+   else "overview" if path == "/overview"
+   else "regulars" if path == "/regulars"
+   else "cupboard" if path.startswith("/cupboard")
+   else "account" if path == "/account"
+   else "home" if path == "/" else "" %}
+{% macro nav_item(here, key, href, icon, label) -%}
+<a class="nav-link {{ 'active' if here == key }}" href="{{ href }}"{% if here == key %} aria-current="page"{% endif %}><svg class="icon" aria-hidden="true"><use href="#i-{{ icon }}"/></svg>{{ label }}</a>
+{%- endmacro %}
+{% macro tab_item(here, key, href, icon, label, extra="") -%}
+<a class="tab-item {{ extra }} {{ 'active' if here == key }}" href="{{ href }}"{% if here == key %} aria-current="page"{% endif %}><span class="icon-wrap"><svg class="icon" aria-hidden="true"><use href="#i-{{ icon }}"/></svg></span>{{ label }}</a>
+{%- endmacro %}
+
+{% block layout %}
+<div class="shell">
+  <header class="appbar">
+    <a class="brand" href="/"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>Grocery Agent</a>
+    <button type="button" class="icon-btn" data-nav-toggle aria-label="Menu"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></button>
+  </header>
+
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#i-logo"/></svg></span>Grocery Agent</a>
+    <nav class="nav" aria-label="Main">
+      {{ nav_item(here, "home", "/", "home", "Home") }}
+      {{ nav_item(here, "scan", "/capture", "scan", "Scan in store") }}
+      {{ nav_item(here, "review", "/capture/queue", "inbox", "Captures") }}
+      <div class="nav-sep"></div>
+      {{ nav_item(here, "receipts", "/receipts", "receipt", "Receipts") }}
+      {{ nav_item(here, "add", "/receipts/new", "plus", "Add receipt") }}
+      <div class="nav-sep"></div>
+      {{ nav_item(here, "overview", "/overview", "chart", "Monthly overview") }}
+      {{ nav_item(here, "regulars", "/regulars", "star", "What I buy most") }}
+      {{ nav_item(here, "cupboard", "/cupboard", "box", "Products at home") }}
+    </nav>
+    <div class="sidebar-foot nav">
+      {{ nav_item(here, "account", "/account", "user", "Account") }}
+      {% if csrf_token %}
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="nav-link"><svg class="icon" aria-hidden="true"><use href="#i-logout"/></svg>Sign out</button>
+      </form>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
   </main>
-  <script src="{{ static_url('js/common.js') }}" defer></script>
+
+  <nav class="tabbar" aria-label="Quick">
+    {{ tab_item(here, "home", "/", "home", "Home") }}
+    {{ tab_item(here, "receipts", "/receipts", "receipt", "Receipts") }}
+    {{ tab_item(here, "scan", "/capture", "scan", "Scan", "scan") }}
+    {{ tab_item(here, "overview", "/overview", "chart", "Overview") }}
+    <button type="button" class="tab-item" data-nav-toggle><span class="icon-wrap"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></span>More</button>
+  </nav>
+</div>
+{% endblock %}
+<script src="{{ static_url('js/common.js') }}" defer></script>
 </body>
 </html>

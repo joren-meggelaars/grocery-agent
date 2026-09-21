@@ -83,6 +83,15 @@ docker compose exec db psql -U grocery -d grocery \
 - [ ] H7. After a few receipts: does each product show what you last paid and where? Do you see *Seen cheaper* when a Lidl label was cheaper?
 - [ ] H8. In the shop: scan the label of a product on the list. Does the confirm screen say *You have this at home*?
 
+## I. Look and feel (on the iPhone)
+
+- [ ] I1. Open the app from the home-screen icon: is the status bar and the top of the screen black, without a white strip?
+- [ ] I2. The bottom tab bar: Home, Receipts, Scan (raised blue button), Overview, More. Is it clear of the home indicator, and does *More* open the full menu?
+- [ ] I3. Does the review screen's *Lines / Total / Difference* bar stay above the tab bar while you scroll a long receipt?
+- [ ] I4. Dark mode (iPhone setting): pages stay readable, the hero card and charts look right.
+- [ ] I5. On the scan page, does nothing jump when the *waiting to upload* bar appears or disappears?
+- [ ] I6. After the update the old look may show once from the phone's cache: open the scan page online once and it refreshes.
+
 ## G. Known gaps on my side (not tested, not blocking)
 
 - The real Claude call for shelf labels (prompt `shelf_v1`) has only run against a stub. Expect one tuning round.

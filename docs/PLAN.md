@@ -1,6 +1,6 @@
 # Grocery Agent: plan
 
-Status: approved 2026-09-20 with the decisions below. Phases 0 to 4 built (2026-09-20).
+Status: approved 2026-09-20 with the decisions below. Phases 0 to 4 built, restyled 2026-09-21.
 
 ## Goals
 
@@ -185,3 +185,15 @@ where SQL can decide, per-task model setting. To be measured from the logged tok
 - "Last paid" comes from receipts only; a shelf sighting stands in as "Last seen" when there is no receipt yet.
 - The shop scan tells you when the product is already on the list.
 - Feeds Phase 5: the list (plus heavy-use flag and purchase frequency) is the watch list for the deals radar.
+
+## Look and feel (restyle, 2026-09-21)
+
+- Same structure as the Trendwatch admin (design tokens in CSS variables, dark sidebar with icon navigation, soft bordered
+  cards, pill badges and tabs, a gradient hero card), in black and blue: black sidebar and app bar, blue primary and
+  accents, a black-to-blue hero on Home and the overview, true black in dark mode. Light and dark follow the system.
+- Phone: black app bar with a menu button, plus a fixed bottom tab bar (Home, Receipts, a raised Scan button, Overview,
+  More) so the main things are one thumb away. Desktop: the sidebar.
+- The scan page stays identical for every user (so the service worker can cache it): the sidebar there has an Account link
+  instead of a Sign-out form, which needs a CSRF token.
+- Contrast was computed for 38 text/background pairs in both modes (all pass); the pages were checked in a headless browser
+  at phone and desktop width, light and dark. A real iPhone has not seen it yet.

@@ -94,7 +94,7 @@ def test_overview_shows_hero_charts_and_tables(session, db, month_start):
     make_receipt(db, "jumbo", month_start, [("item", 15000, "Zuivel & eieren", "Melk")])
     page = session.get("/overview").text
     assert "€400.00 reference" in page
-    assert '<p class="hero">€400.00</p>' in page  # 25000 + 15000 food; the 40.00 of household is not food
+    assert '<p class="figure">€400.00</p>' in page  # 25000 + 15000 food; the 40.00 of household is not food
     assert "€440.00" in page  # all purchases
     assert page.count('role="img"') >= 4  # meter and three charts
     assert "Food spend per month" in page and "Where it went" in page and "Per store" in page
@@ -154,7 +154,7 @@ def test_a_past_month_shows_its_own_receipts(session, db, month_start):
     page = session.get(f"/overview?month={last:%Y-%m}").text
     assert "€123.45" in page and "Lidl" in page and "No saved receipts" not in page
     current = session.get("/overview").text
-    assert '<p class="hero">€0.00</p>' in current  # this month has nothing yet ...
+    assert '<p class="figure">€0.00</p>' in current  # this month has nothing yet ...
     assert "less than last month (€123.45)" in current  # ... and is compared with the past month
 
 

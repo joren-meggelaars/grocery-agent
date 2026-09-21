@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Capture - Grocery Agent{% endblock %}
 {% block content %}
-<p class="topbar"><a href="/capture/queue">&larr; Captures</a> <a href="/capture">Scan</a></p>
+<p class="crumbs"><a href="/capture/queue">&larr; Captures</a> <a href="/capture">Scan</a></p>
 <h1>
   {{ capture.product_name or capture.off_name or "Price label" }}
   <span class="badge status-{{ capture.status }}">{{ labels[capture.status] }}</span>

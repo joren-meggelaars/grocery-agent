@@ -1,6 +1,6 @@
 // Service worker: keeps the capture page and its assets available offline.
 // It never caches API responses or any page with personal data; /capture is identical for everyone.
-var VERSION = "v1";
+var VERSION = "v2"; // bump when the shell or styles change: old cached copies are deleted on activate
 var CACHE = "ga-shell-" + VERSION;
 var PAGE = "/capture";
 

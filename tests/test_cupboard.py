@@ -337,7 +337,8 @@ def test_the_cupboard_page_shows_prices_stars_and_a_cheaper_hint(session, db):
 def test_empty_cupboard_explains_what_to_do(session):
     client, _ = session
     page = client.get("/cupboard").text
-    assert "Nothing here yet" in page and "Scan products at home" in page and "Name " not in page.split("<main>")[1][:400]
+    assert "Nothing here yet" in page and "Scan products at home" in page
+    assert "scanned product" not in page  # no "Name N scanned products" button when nothing is waiting
 
 
 def test_toggle_remove_and_add_from_the_page(session, db):

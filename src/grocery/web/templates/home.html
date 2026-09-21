@@ -1,23 +1,33 @@
 {% extends "base.html" %}
+{% from "analytics/_meter.html" import meter %}
+{% block title %}Home - Grocery Agent{% endblock %}
 {% block content %}
-<h1>Grocery Agent</h1>
-<p class="muted">Signed in as {{ user.username }}.</p>
 {% include "receipts/_budget.html" %}
-<nav class="stack">
-  <a class="btn primary big" href="/capture">Scan in store</a>
-  {% if to_review %}<a class="btn" href="/capture/queue">{{ to_review }} capture{{ "s" if to_review != 1 }} to review</a>{% endif %}
-  <a class="btn primary" href="/receipts/new">Add receipt</a>
-  <a class="btn" href="/cupboard">Products at home</a>
-  <a class="btn" href="/overview">Monthly overview</a>
-  <a class="btn" href="/regulars">What I buy most</a>
-  <a class="btn" href="/receipts">Receipts</a>
-  <a class="btn" href="/receipts/quick?store=bakery">Bakery</a>
-  <a class="btn" href="/receipts/quick?store=turkish">Turkish supermarket</a>
-  <a class="btn" href="/account">Account and sessions</a>
-  <form method="post" action="/logout" class="stack">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit" class="btn">Sign out</button>
-  </form>
+
+<section class="hero-card" aria-labelledby="hero-title">
+  <p class="eyebrow" id="hero-title">Food spend in {{ month.strftime("%B") }}</p>
+  <p class="figure">{{ eur(food_cents) }}</p>
+  <p class="muted">of {{ eur(reference.reference_cents) }} reference &middot; {{ (reference.used_pct * 100)|round|int }}%</p>
+  {{ meter(reference) }}
+  <p class="state state-{{ reference.state }}">
+    {% if reference.state == "over" %}<span aria-hidden="true">&#9650;</span> Over the reference by {{ eur(-reference.remaining_cents) }}
+    {% elif reference.state == "warn" %}<span aria-hidden="true">!</span> {{ eur(reference.remaining_cents) }} left
+    {% else %}<span aria-hidden="true">&#10003;</span> {{ eur(reference.remaining_cents) }} left{% endif %}
+  </p>
+  <p class="muted"><a href="/overview">Open the monthly overview</a></p>
+</section>
+
+<nav class="tiles" aria-label="Actions">
+  <a class="tile primary" href="/capture"><svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>Scan in store<small>Barcode and price label</small></a>
+  <a class="tile" href="/receipts/new"><svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg>Add receipt<small>Photo or PDF</small></a>
+  <a class="tile" href="/capture/queue"><svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg>Captures
+    <small>{% if to_review %}{{ to_review }} to review{% else %}Nothing to review{% endif %}</small></a>
+  <a class="tile" href="/cupboard"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg>Products at home<small>Your list to compare</small></a>
+  <a class="tile" href="/regulars"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg>What I buy most<small>Ranked by visits</small></a>
+  <a class="tile" href="/receipts/quick?store=bakery"><svg class="icon" aria-hidden="true"><use href="#i-bread"/></svg>Bakery<small>Quick add</small></a>
+  <a class="tile" href="/receipts/quick?store=turkish"><svg class="icon" aria-hidden="true"><use href="#i-meat"/></svg>Turkish supermarket<small>Per kg</small></a>
+  <a class="tile" href="/receipts"><svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg>All receipts<small>Review and edit</small></a>
 </nav>
-<p class="muted">API spend this month: EUR {{ "%.2f"|format(budget.spent) }} of {{ "%.2f"|format(budget.cap) }} (estimate).</p>
+
+<p class="muted">Signed in as {{ user.username }}. API spend this month: EUR {{ "%.2f"|format(budget.spent) }} of {{ "%.2f"|format(budget.cap) }} (estimate).</p>
 {% endblock %}

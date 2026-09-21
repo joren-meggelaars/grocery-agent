@@ -13,3 +13,11 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(function () { /* unsupported or blocked */ });
   });
 }
+
+// Phone layout: the "menu" buttons open and close the full navigation.
+document.querySelectorAll("[data-nav-toggle]").forEach(function (button) {
+  button.addEventListener("click", function () {
+    var shell = document.querySelector(".shell");
+    if (shell) shell.classList.toggle("nav-open");
+  });
+});
