@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_alternative.html" import alternative %}
 {% block title %}Products at home - Grocery Agent{% endblock %}
 {% block content %}
 <p class="crumbs"><a href="/">&larr; Home</a> <a href="/regulars">What I buy most</a></p>
@@ -46,10 +47,7 @@
     {% if r.last %}
       <p>{{ "Last paid" if r.paid else "Last seen" }}: <strong>{{ eur(r.last.value) }}</strong> {{ basis_label[r.basis] }} at {{ r.last.store }}
         <span class="muted">({{ r.last.observed_on.strftime("%d %b") }}, {{ r.last.source }})</span></p>
-      {% if r.cheaper %}
-      <p class="cheaper"><strong>Seen cheaper:</strong> {{ r.cheaper.store }} {{ eur(r.cheaper.value) }}
-        <span class="muted">({{ r.cheaper.source }}, {{ r.cheaper.observed_on.strftime("%d %b") }}{% if r.cheaper.promo %}, promotion{% endif %})</span></p>
-      {% endif %}
+      <p>{{ alternative(r.alternative, r.alternative_pct, r.basis, r.incomparable, eur) }}</p>
     {% else %}
       <p class="muted">No price seen yet. Scan its shelf label in the shop, or save a receipt with this product.</p>
     {% endif %}

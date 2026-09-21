@@ -22,6 +22,7 @@ from grocery.analytics.aggregate import (
 from grocery.analytics.queries import load_categories, load_receipts
 from grocery.capture.service import local_date
 from grocery.db.base import utcnow
+from grocery.prices.feedback import price_overview
 from grocery.security.deps import Principal, current_principal, get_db
 from grocery.web.templating import templates
 
@@ -94,6 +95,7 @@ def regulars(
     today = local_date(utcnow(), request.app.state.settings.timezone)
     since = period_start(period, today)
     stats, unmatched = top_products(load_receipts(db, since=since), since)
+    overview = price_overview(db, [s.product_id for s in stats], today)
     return templates.TemplateResponse(
         request,
         "analytics/regulars.html",
@@ -102,6 +104,7 @@ def regulars(
             "period": period,
             "periods": PERIODS,
             "stats": stats,
+            "overview": overview,
             "unmatched": unmatched,
             "eur": charts.eur,
         },

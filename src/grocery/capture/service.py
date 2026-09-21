@@ -20,7 +20,8 @@ from grocery.llm.client import ReadResult, ShelfReader
 from grocery.llm.pricing import estimate_cost_eur
 from grocery.llm.schemas import ShelfLabelExtraction
 from grocery.money import format_cents
-from grocery.prices.observations import record_shelf
+from grocery.prices.observations import record_shelf, set_pack_content
+from grocery.products.content import ContentError, parse_content, unit_price_from_content
 from grocery.products.ean import clean_ean
 from grocery.products.matching import MatchIndex
 from grocery.products.off import Fetcher, OffProduct, http_fetch, lookup
@@ -253,6 +254,8 @@ class CaptureInput:
     requires_card: bool
     valid_from: date | None
     valid_until: date | None
+    pack_content_text: str = ""  # "500 g": gives a price per kg or l when the label has none
+    sold_per_piece: bool | None = None  # None: the question was not asked; True: do not ask again
 
 
 def confirm_capture(
@@ -275,6 +278,12 @@ def confirm_capture(
         problems.append("Choose kg or l for the price per unit.")
     if data.promo_kind and data.promo_kind not in PROMO_KINDS:
         problems.append("Unknown promotion type.")
+    pack = None
+    if data.pack_content_text.strip():
+        try:
+            pack = parse_content(data.pack_content_text)
+        except ContentError as exc:
+            problems.append(f"Pack content: {exc}")
     store = db.scalar(select(Store).where(Store.chain == data.store_chain))
     if store is None:
         problems.append("Choose a store.")
@@ -289,6 +298,15 @@ def confirm_capture(
         elif link.product_id != product.id:
             link.product_id = product.id  # the user's answer replaces the old link
 
+    if pack is not None:
+        set_pack_content(db, product, *pack)
+    elif data.sold_per_piece:
+        product.sold_per_piece = True
+
+    unit_price, unit_basis = data.unit_price_cents, data.unit_basis
+    if unit_price is None and product.pack_content and product.pack_basis and not product.sold_per_piece:
+        unit_price, unit_basis = unit_price_from_content(data.price_cents, product.pack_content), product.pack_basis
+
     capture.ean = ean
     capture.store_id = store.id
     capture.product_id = product.id
@@ -296,8 +314,8 @@ def confirm_capture(
     capture.category_id = product.category_id
     capture.price_cents = data.price_cents
     capture.effective_price_cents = data.effective_price_cents
-    capture.unit_price_cents = data.unit_price_cents
-    capture.unit_basis = data.unit_basis if data.unit_price_cents is not None else None
+    capture.unit_price_cents = unit_price
+    capture.unit_basis = unit_basis if unit_price is not None else None
     capture.promo_kind = data.promo_kind or None
     capture.promo_text = data.promo_text.strip()[:200] or None
     capture.requires_card = data.requires_card

@@ -22,6 +22,7 @@ def values_from_capture(capture: ShelfCapture, default_store: str) -> dict:
         "requires_card": capture.requires_card,
         "valid_from": capture.valid_from.isoformat() if capture.valid_from else "",
         "valid_until": capture.valid_until.isoformat() if capture.valid_until else "",
+        "pack_content": "",
     }
 
 
@@ -63,11 +64,14 @@ def parse_capture_form(form) -> tuple[CaptureInput, dict, list[str]]:
         requires_card=bool(form.get("requires_card")),
         valid_from=day("valid_from", "The start date"),
         valid_until=day("valid_until", "The end date"),
+        pack_content_text=get("pack_content"),
+        sold_per_piece=bool(form.get("sold_per_piece")) if form.get("pack_shown") else None,
     )
     values = {
         "ean": get("ean"), "product": get("product"), "category_id": data.category_id, "store": get("store"),
         "price": get("price"), "effective_price": get("effective_price"), "unit_price": get("unit_price"),
         "unit_basis": get("unit_basis") or "kg", "promo_kind": get("promo_kind"), "promo_text": get("promo_text"),
         "requires_card": data.requires_card, "valid_from": get("valid_from"), "valid_until": get("valid_until"),
+        "pack_content": get("pack_content"),
     }
     return data, values, errors

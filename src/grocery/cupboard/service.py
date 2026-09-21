@@ -16,14 +16,12 @@ from grocery.db.models import (
     Category,
     CupboardItem,
     CupboardScan,
-    PriceObservation,
     ProductEan,
     Receipt,
     ReceiptLine,
 )
 from grocery.jobs.queue import enqueue
-from grocery.prices.feedback import Seen, feedback_for, seen_from
-from grocery.prices.observations import comparable
+from grocery.prices.feedback import Seen, price_overview
 from grocery.products.ean import clean_ean
 from grocery.products.matching import MatchIndex
 from grocery.receipts.service import ConfirmError, get_or_create_product
@@ -175,7 +173,9 @@ class CupboardRow:
     last: Seen | None  # what was paid (latest receipt); else the latest shelf sighting
     paid: bool  # True when `last` comes from a receipt, i.e. it is what you actually paid
     basis: str | None
-    cheaper: Seen | None  # the cheapest recent sighting at another store, if any
+    alternative: Seen | None  # the cheapest recent price at another store, cheaper or not
+    alternative_pct: float | None  # against `last`: negative = cheaper
+    incomparable: bool  # another store has a price, but not per the same unit
 
 
 def cupboard_rows(db: Session, today: date) -> list[CupboardRow]:
@@ -199,30 +199,16 @@ def cupboard_rows(db: Session, today: date) -> list[CupboardRow]:
         ).all()
     )
 
-    latest_paid: dict[int, PriceObservation] = {}
-    latest_seen: dict[int, PriceObservation] = {}
-    for obs in db.scalars(
-        select(PriceObservation)
-        .where(PriceObservation.product_id.in_(ids))
-        .order_by(PriceObservation.observed_on.desc(), PriceObservation.id.desc())
-    ):
-        latest_seen.setdefault(obs.product_id, obs)
-        if obs.source == "receipt":
-            latest_paid.setdefault(obs.product_id, obs)
-
+    overview = price_overview(db, ids, today)
     rows = []
     for item in items:
-        paid = item.product_id in latest_paid
-        obs = latest_paid.get(item.product_id) or latest_seen.get(item.product_id)
-        last = cheaper = basis = None
-        if obs is not None:
-            basis, value = comparable(obs.price_cents, obs.unit_price_cents, obs.unit_basis)
-            last = seen_from(obs, value)
-            fb = feedback_for(db, item.product_id, obs.store_id, basis, value, today)
-            cheaper = fb.cheaper_elsewhere[0] if fb.cheaper_elsewhere else None
+        view = overview[item.product_id]
         category = item.product.category.name if item.product.category else None
         rows.append(
-            CupboardRow(item, item.product.name, category, item.heavy_use, bought.get(item.product_id, 0), last, paid, basis, cheaper)
+            CupboardRow(
+                item, item.product.name, category, item.heavy_use, bought.get(item.product_id, 0), view.last,
+                view.paid, view.basis, view.alternative, view.pct, view.incomparable,
+            )
         )
     rows.sort(key=lambda r: (not r.heavy, -r.times_bought, r.name.casefold()))
     return rows

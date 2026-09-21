@@ -24,7 +24,7 @@ from grocery.llm.budget import budget_state
 from grocery.llm.client import ReadResult, ReceiptReader
 from grocery.llm.pricing import estimate_cost_eur
 from grocery.llm.schemas import ReceiptExtraction
-from grocery.prices.observations import delete_receipt_observations, record_receipt
+from grocery.prices.observations import delete_receipt_observations, record_receipt, set_pack_content
 from grocery.products.matching import Match, MatchIndex
 from grocery.products.normalize import normalize_raw, product_key
 from grocery.receipts.validation import LineData, ValidationResult, expected_line_total, validate_receipt
@@ -295,6 +295,8 @@ class LineInput:
     line_total_cents: int
     product_name: str
     category_id: int | None
+    pack: tuple[int, str] | None = None  # content of one pack: (grams or ml, 'kg' or 'l')
+    sold_per_piece: bool | None = None  # None: not asked; True: do not ask again
 
 
 @dataclass
@@ -382,6 +384,10 @@ def confirm_receipt(
         if li.kind == "item" and li.product_name.strip():
             product = _get_or_create_product(db, li.product_name, li.category_id)
             _learn_mapping(db, chain, li.raw_text, product, now)
+            if li.pack is not None:
+                set_pack_content(db, product, *li.pack)
+            elif li.sold_per_piece:
+                product.sold_per_piece = True
         orig = originals.get(li.orig_no) if li.orig_no else None
         edited = orig is None or orig[:5] != (li.raw_text[:255], li.quantity_milli, li.unit_price_cents,
                                                li.line_total_cents, li.kind)

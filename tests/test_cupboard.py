@@ -247,7 +247,7 @@ def test_each_row_shows_the_last_price_and_a_cheaper_sighting(env):
     obs(db, melk, "lidl", 99, TODAY - timedelta(days=1), source="shelf")
     row = service.cupboard_rows(db, TODAY)[0]
     assert (row.last.store, row.last.value, row.basis, row.paid) == ("Plus", 135, "pack", True)  # paid, not the shelf price
-    assert (row.cheaper.store, row.cheaper.value, row.category) == ("Lidl", 99, "Zuivel & eieren")
+    assert (row.alternative.store, row.alternative.value, row.category) == ("Lidl", 99, "Zuivel & eieren")
 
 
 def test_without_a_receipt_a_shelf_sighting_stands_in_and_is_not_called_paid(env):
@@ -266,10 +266,10 @@ def test_a_product_never_seen_at_a_price_has_no_price_or_suggestion(env):
     db.add(CupboardItem(product_id=p.id))
     db.commit()
     row = service.cupboard_rows(db, TODAY)[0]
-    assert row.last is None and row.cheaper is None and row.basis is None
+    assert row.last is None and row.alternative is None and row.basis is None
 
 
-def test_a_product_that_is_already_the_cheapest_shows_no_suggestion(env):
+def test_a_product_that_is_already_the_cheapest_still_shows_the_alternative_but_not_as_cheaper(env):
     _, db = env
     p = product(db, "Kip")
     db.add(CupboardItem(product_id=p.id))
@@ -277,7 +277,8 @@ def test_a_product_that_is_already_the_cheapest_shows_no_suggestion(env):
     obs(db, p, "turkish", 742, TODAY - timedelta(days=1), unit=849, basis="kg")
     obs(db, p, "plus", 1199, TODAY - timedelta(days=3), unit=1199, basis="kg")
     row = service.cupboard_rows(db, TODAY)[0]
-    assert row.last.store == "Turkish supermarket" and row.cheaper is None
+    assert row.last.store == "Turkish supermarket"
+    assert (row.alternative.store, row.alternative.value) == ("Plus", 1199) and row.alternative_pct > 0
 
 
 def test_on_cupboard_helper(env):
@@ -331,7 +332,7 @@ def test_the_cupboard_page_shows_prices_stars_and_a_cheaper_hint(session, db):
     obs(db, p, "lidl", 99, today - timedelta(days=1), source="shelf")
     page = client.get("/cupboard").text
     assert "Halfvolle melk 1L" in page and "used a lot" in page and 'aria-pressed="true"' in page
-    assert "Last paid" in page and "€1.29" in page and "at Plus" in page and "Seen cheaper:" in page and "Lidl" in page and "€0.99" in page
+    assert "Last paid" in page and "€1.29" in page and "at Plus" in page and "Cheapest alternative:" in page and "Lidl" in page and "€0.99" in page
 
 
 def test_empty_cupboard_explains_what_to_do(session):

@@ -47,8 +47,16 @@
         {% if feedback.last_paid %}<br>Last: EUR {{ fmt(feedback.last_paid.value) }} at {{ feedback.last_paid.store }} on {{ feedback.last_paid.observed_on.isoformat() }}
           <span class="muted">({{ feedback.last_paid.source }})</span>{% endif %}</p>
     {% endif %}
+    {% if not feedback.cheaper_elsewhere %}
+      {% if feedback.alternative %}
+      <p><strong>Cheapest alternative:</strong> {{ feedback.alternative.store }} EUR {{ fmt(feedback.alternative.value) }} {{ basis_label[feedback.basis] }}
+        <span class="muted">({{ feedback.alternative.source }}, {{ feedback.alternative.observed_on.isoformat() }}{% if feedback.alternative.promo %}, promotion{% endif %})</span></p>
+      {% elif feedback.incomparable %}
+      <p class="muted"><strong>Cheapest alternative:</strong> not comparable yet, another store has a price per kg or l. Fill in the pack content to compare.</p>
+      {% endif %}
+    {% endif %}
     {% if feedback.cheaper_elsewhere %}
-      <p><strong>Cheaper elsewhere</strong></p>
+      <p><strong>Cheaper elsewhere</strong> <span class="muted">(cheapest alternative first)</span></p>
       <ul>
         {% for s in feedback.cheaper_elsewhere %}
         <li>{{ s.store }}: EUR {{ fmt(s.value) }} {{ basis_label[feedback.basis] }}
@@ -117,6 +125,22 @@
         </select>
       </label>
     </div>
+
+    {% if pack %}
+    <div class="card pack-ask">
+      <input type="hidden" name="pack_shown" value="1">
+      {% if pack.known %}
+      <p><strong>Pack content known from earlier.</strong> The price per kg or l is calculated from it.</p>
+      {% else %}
+      <p><strong>No price per kg or l on this label.</strong> Read the content from the pack, for example 500 g or 1,5 l,
+        and it is calculated, so this product can be compared with other stores.</p>
+      {% endif %}
+      <label>Pack content
+        <input type="text" name="pack_content" class="big" value="{{ pack.content }}" placeholder="500 g" autocomplete="off">
+      </label>
+      <label class="check"><input type="checkbox" name="sold_per_piece"> Sold per piece: do not ask for this product again</label>
+    </div>
+    {% endif %}
 
     <label>Promotion
       <select name="promo_kind" class="big">

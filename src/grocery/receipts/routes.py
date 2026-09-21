@@ -179,8 +179,8 @@ def _detail(request, principal, db, receipt, rows=None, errors=None, status=200,
         [LineData(l.line_no, l.kind, l.quantity_milli, l.unit_price_cents, l.line_total_cents) for l in receipt.lines],
         receipt.total_cents, receipt.purchased_on,
     )
-    ctx = _review_context(db, receipt, rows if rows is not None else forms.rows_from_receipt(receipt, validation),
-                          validation, errors or [])
+    rows = rows if rows is not None else forms.rows_from_receipt(receipt, validation)
+    ctx = _review_context(db, receipt, forms.mark_pack_questions(db, rows), validation, errors or [])
     ctx["form_values"] = form_values
     ctx["labels"] = STATUS_LABEL
     ctx["editing"] = editing or bool(errors)

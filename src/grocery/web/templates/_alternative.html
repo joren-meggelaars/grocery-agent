@@ -1,0 +1,11 @@
+{# The cheapest price seen at another store than the last one. pct: alternative against last, negative = cheaper. #}
+{% macro alternative(alt, pct, basis, incomparable, money) %}
+{% if alt %}
+<span class="alt{{ ' cheaper' if pct is not none and pct < 0 }}"><strong>Cheapest alternative:</strong> {{ alt.store }} {{ money(alt.value) }} {{ basis_label[basis] }}
+  <span class="muted">({% if pct is not none %}{{ "%+.0f"|format(pct * 100) }}%, {% endif %}{{ alt.source }}, {{ alt.observed_on.strftime("%d %b") }}{% if alt.promo %}, promotion{% endif %})</span></span>
+{% elif incomparable %}
+<span class="alt muted"><strong>Cheapest alternative:</strong> not comparable yet, another store has a price per kg or l. Fill in the pack content when you save this product.</span>
+{% else %}
+<span class="alt muted"><strong>Cheapest alternative:</strong> none seen at another store in the last 60 days.</span>
+{% endif %}
+{% endmacro %}

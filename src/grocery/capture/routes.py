@@ -22,6 +22,7 @@ from grocery.db.models import Product, ShelfCapture, Store
 from grocery.money import format_cents
 from grocery.prices.feedback import feedback_for
 from grocery.prices.observations import shelf_comparable
+from grocery.products.pack import pack_questions
 from grocery.receipts.service import ConfirmError
 from grocery.security.deps import Principal, current_principal, get_db
 from grocery.uploads.images import UploadError
@@ -118,12 +119,18 @@ def _feedback(db: Session, request: Request, capture: ShelfCapture):
 def _detail(request, principal, db, capture, values=None, errors=None, status=200, manual=False):
     settings = request.app.state.settings
     default_store = capture.store.chain if capture.store else "other"
+    values = values or forms.values_from_capture(capture, default_store)
+    pack = None
+    if capture.status != "extracting" and not values.get("unit_price"):
+        pack = pack_questions(db, [(values["product"], values["category_id"])])[0]
+        if pack and values.get("pack_content"):
+            pack["content"] = values["pack_content"]
     return templates.TemplateResponse(
         request, "capture/detail.html",
         {
             "user": principal.user, "csrf_token": principal.csrf_token, "capture": capture,
             "labels": STATUS_LABEL, "fmt": format_cents, "errors": errors or [], "manual": manual,
-            "values": values or forms.values_from_capture(capture, default_store),
+            "values": values, "pack": pack,
             "stores": db.scalars(select(Store).order_by(Store.id)).all(),
             "categories": categories(db),
             "product_names": db.scalars(select(Product.name).order_by(Product.name).limit(3000)).all(),

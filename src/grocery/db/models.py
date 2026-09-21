@@ -101,6 +101,10 @@ class Product(Base):
     name: Mapped[str] = mapped_column(String(200))
     name_key: Mapped[str] = mapped_column(String(200), unique=True)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"))
+    # content of one pack in grams (basis kg) or millilitres (basis l): turns a pack price into a price per kg/l
+    pack_content: Mapped[int | None] = mapped_column(Integer)
+    pack_basis: Mapped[str | None] = mapped_column(String(2))
+    sold_per_piece: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
     category: Mapped[Category | None] = relationship()

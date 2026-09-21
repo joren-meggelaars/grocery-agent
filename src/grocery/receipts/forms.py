@@ -2,6 +2,8 @@
 
 from datetime import date
 
+from grocery.products.content import ContentError, parse_content
+from grocery.products.pack import pack_questions
 from grocery.money import ParseError, format_cents, format_quantity, parse_euro, parse_quantity_milli
 from grocery.receipts.service import ConfirmInput, LineInput
 from grocery.receipts.validation import ValidationResult
@@ -15,7 +17,7 @@ def _blank_row(index: int) -> dict:
     return {
         "i": index, "orig": "", "kind": "item", "raw": "", "qty": "1", "unit": "pcs", "unit_price": "",
         "total": "", "product": "", "category_id": None, "match_source": "none", "match_conf": None,
-        "flags": [],
+        "flags": [], "pack": None, "pack_content": "", "pack_asked": False, "per_piece": False,
     }
 
 
@@ -38,6 +40,16 @@ def rows_from_receipt(receipt, validation: ValidationResult | None = None) -> li
     return rows
 
 
+def mark_pack_questions(db, rows: list[dict]) -> list[dict]:
+    """Ask for the pack content of piece-priced product lines that are not plainly sold per piece."""
+    candidates = [r for r in rows if r["kind"] == "item" and r["unit"] == "pcs" and r["product"].strip()]
+    for r, question in zip(candidates, pack_questions(db, [(r["product"], r["category_id"]) for r in candidates])):
+        r["pack"] = question
+        if question and not r["pack_content"]:
+            r["pack_content"] = question["content"]
+    return rows
+
+
 def parse_confirm_form(form) -> tuple[ConfirmInput, list[dict], list[str]]:
     """Returns (input, rows as submitted, errors). Rows let the page re-render exactly what was typed."""
     errors: list[str] = []
@@ -56,6 +68,7 @@ def parse_confirm_form(form) -> tuple[ConfirmInput, list[dict], list[str]]:
             orig=get("orig"), kind=get("kind", "item"), raw=get("raw"), qty=get("qty", "1") or "1",
             unit=get("unit", "pcs"), unit_price=get("unit_price"), total=get("total"), product=get("product"),
             category_id=int(get("category")) if get("category").isdigit() else None,
+            pack_content=get("content"), pack_asked=get("packask") == "1", per_piece=bool(form.get(f"l{i}_perpiece")),
         )
         if form.get(f"l{i}_delete") or (not row["raw"] and not row["total"]):
             continue  # removed, or an untouched empty row
@@ -73,12 +86,20 @@ def parse_confirm_form(form) -> tuple[ConfirmInput, list[dict], list[str]]:
         if not row["raw"]:
             errors.append(f"{label}: the receipt text is empty.")
             continue
+        pack = None
+        if row["pack_asked"] and row["pack_content"]:
+            try:
+                pack = parse_content(row["pack_content"])
+            except ContentError as exc:
+                errors.append(f"{label}: pack content. {exc}")
+                continue
         lines.append(
             LineInput(
                 orig_no=int(row["orig"]) if row["orig"].isdigit() else None,
                 kind=row["kind"], raw_text=row["raw"], quantity_milli=quantity, unit=row["unit"],
                 unit_price_cents=unit_price, line_total_cents=total, product_name=row["product"],
                 category_id=row["category_id"],
+                pack=pack, sold_per_piece=row["per_piece"] if row["pack_asked"] else None,
             )
         )
 

@@ -36,3 +36,4 @@ def localtime(value: datetime | None, fmt: str = "%d %b %H:%M") -> str:
 
 
 templates.env.filters["localtime"] = localtime
+templates.env.globals["basis_label"] = {"pack": "per pack", "kg": "per kg", "l": "per l"}

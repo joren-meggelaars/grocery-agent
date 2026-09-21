@@ -35,6 +35,8 @@ class Feedback:
     pct_vs_usual: float | None = None
     last_paid: Seen | None = None
     cheaper_elsewhere: list[Seen] = field(default_factory=list)
+    alternative: Seen | None = None  # the cheapest recent price at another store, cheaper or not
+    incomparable: bool = False  # another store has a price, but not per the same unit
 
 
 def _seen(o: PriceObservation, value: int) -> Seen:
@@ -90,4 +92,66 @@ def feedback_for(
         if o.store_id not in best_per_store or v < best_per_store[o.store_id][1]:
             best_per_store[o.store_id] = (o, v)
     result.cheaper_elsewhere = [_seen(o, v) for o, v in sorted(best_per_store.values(), key=lambda t: t[1])[:3]]
+    result.alternative, result.incomparable = _alternative(
+        [(o, *comparable(o.price_cents, o.unit_price_cents, o.unit_basis)) for o in rows if o.store_id != store_id
+         and not (exclude and (o.source, o.source_ref_id) == exclude)],
+        basis, today,
+    )
     return result
+
+
+def _alternative(candidates: list[tuple[PriceObservation, str, int]], basis: str, today: date) -> tuple[Seen | None, bool]:
+    """The cheapest recent price per `basis` among observations at other stores, and whether any were not comparable."""
+    cutoff = today - timedelta(days=CHEAPER_WINDOW_DAYS)
+    best: tuple[PriceObservation, int] | None = None
+    other_basis = False
+    for o, o_basis, value in candidates:  # newest first, so on a tie the newest wins
+        if o.observed_on < cutoff or (o.valid_until is not None and o.valid_until < today):
+            continue
+        if o_basis != basis:
+            other_basis = True
+        elif best is None or value < best[1]:
+            best = (o, value)
+    return (_seen(*best) if best else None), (other_basis and best is None)
+
+
+@dataclass
+class PriceOverview:
+    """What one product costs: the latest price and the cheapest alternative at another store."""
+
+    last: Seen | None = None
+    paid: bool = False  # `last` is a receipt price, i.e. what was actually paid
+    basis: str | None = None
+    alternative: Seen | None = None
+    incomparable: bool = False
+    pct: float | None = None  # alternative against last: negative = cheaper
+
+
+def price_overview(db: Session, product_ids: list[int], today: date) -> dict[int, PriceOverview]:
+    """Latest price and cheapest alternative for many products, in one query."""
+    grouped: dict[int, list[PriceObservation]] = {pid: [] for pid in product_ids}
+    if product_ids:
+        for o in db.scalars(
+            select(PriceObservation)
+            .where(PriceObservation.product_id.in_(product_ids))
+            .order_by(PriceObservation.observed_on.desc(), PriceObservation.id.desc())
+        ):
+            grouped[o.product_id].append(o)
+    out: dict[int, PriceOverview] = {}
+    for pid, observations in grouped.items():
+        view = out[pid] = PriceOverview()
+        if not observations:
+            continue
+        latest = next((o for o in observations if o.source == "receipt"), None)
+        view.paid = latest is not None
+        latest = latest or observations[0]
+        view.basis, value = comparable(latest.price_cents, latest.unit_price_cents, latest.unit_basis)
+        view.last = _seen(latest, value)
+        view.alternative, view.incomparable = _alternative(
+            [(o, *comparable(o.price_cents, o.unit_price_cents, o.unit_basis)) for o in observations
+             if o.store_id != latest.store_id],
+            view.basis, today,
+        )
+        if view.alternative and value:
+            view.pct = (view.alternative.value - value) / value
+    return out

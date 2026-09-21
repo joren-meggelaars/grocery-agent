@@ -329,3 +329,7 @@ details > summary { cursor: pointer; padding: 0.7rem 0; font-weight: 600; }
 }
 
 .raw { margin: 8px 0 0; padding: 0.75rem; overflow-x: auto; font: 0.78rem/1.4 ui-monospace, Consolas, monospace; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); white-space: pre-wrap; word-break: break-word; }
+
+.pack-ask { margin: 0.75rem 0; padding: 0.75rem; border-left: 3px solid var(--accent-line); background: var(--primary-soft); border-radius: var(--radius-sm); }
+.pack-ask p { margin: 0 0 0.5rem; }
+.alt { display: inline; }

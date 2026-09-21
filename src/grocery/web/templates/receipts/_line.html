@@ -38,6 +38,20 @@
       {% for c in categories %}<option value="{{ c.id }}" {{ "selected" if c.id == row.category_id }}>{{ c.name }}</option>{% endfor %}
     </select>
   </label>
+  {% if row.pack %}
+  <div class="pack-ask">
+    <input type="hidden" name="l{{ row.i }}_packask" value="1">
+    {% if row.pack.known %}
+    <p class="muted">Pack content known from earlier: the price per kg or l is calculated.</p>
+    {% else %}
+    <p class="muted"><strong>Price per kg or l unknown.</strong> Read the content from the pack (for example 500 g or 1,5 l) to compare it with other stores.</p>
+    {% endif %}
+    <label>Pack content
+      <input type="text" name="l{{ row.i }}_content" value="{{ row.pack_content }}" placeholder="500 g" autocomplete="off">
+    </label>
+    <label class="check"><input type="checkbox" name="l{{ row.i }}_perpiece" {{ "checked" if row.per_piece }}> Sold per piece: do not ask again</label>
+  </div>
+  {% endif %}
   {% if row.match_source == "mapping" %}<p class="muted">Recognised from an earlier receipt.</p>
   {% elif row.match_source == "fuzzy" %}<p class="muted">Similar to a known product ({{ (row.match_conf * 100)|round|int }}%): check the name.</p>
   {% endif %}
