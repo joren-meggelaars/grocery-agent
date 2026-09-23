@@ -3,7 +3,8 @@
 {% block content %}
 <p class="crumbs"><a href="/receipts">&larr; Receipts</a></p>
 <h1>Quick add</h1>
-<p class="muted">For purchases without a receipt photo, such as the bakery or a weighed purchase at the Turkish supermarket.</p>
+<p class="muted">For purchases without a receipt photo, such as the bakery, a weighed purchase at the Turkish supermarket, or one
+  forgotten item from any store.</p>
 {% for e in errors %}<p class="alert" role="alert">{{ e }}</p>{% endfor %}
 <form method="post" action="/receipts/quick" class="stack" id="quick-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -16,6 +17,11 @@
   <label for="description">What (optional)</label>
   <input id="description" name="description" type="text" value="{{ values.description }}"
          placeholder="{{ 'Kip' if values.store == 'turkish' else 'Brood' if values.store == 'bakery' else 'Groceries' }}">
+  <label for="ean">Barcode / EAN <span class="muted">(optional)</span></label>
+  <input id="ean" name="ean" type="text" inputmode="numeric" autocomplete="off" value="{{ values.ean }}"
+         placeholder="8710400012345">
+  <p class="muted">Fills in the article by itself when this barcode was scanned or bought before, or leave "What" blank
+    and only the barcode: it is looked up.</p>
 
   <h2>Weighed purchase <span class="muted">(optional)</span></h2>
   <div class="grid2">

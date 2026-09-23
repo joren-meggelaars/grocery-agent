@@ -9,7 +9,7 @@ from grocery.jobs.handlers import process_one
 from grocery.money import format_cents
 from grocery.uploads.storage import purge_due_files
 from tests.conftest import csrf_of, login
-from tests.fakes import FakeReader, failed, jpeg_bytes, line, plus_receipt
+from tests.fakes import FakeReader, ean13, failed, jpeg_bytes, line, plus_receipt
 
 
 @pytest.fixture
@@ -242,6 +242,38 @@ def test_quick_add_weighed_purchase_and_it_remembers_the_price(session):
         "price_per_kg": "8,99",
     })
     assert 'value="8.99"' in client.get("/receipts/quick?store=turkish").text
+
+
+def test_quick_form_has_an_optional_barcode_field(session):
+    client, _ = session
+    page = client.get("/receipts/quick?store=plus").text
+    assert 'id="ean"' in page and 'name="ean"' in page
+
+
+def test_quick_add_with_a_barcode_links_it_and_a_second_purchase_reuses_the_name(session, db):
+    client, token = session
+    ean = ean13("871040001234")
+    resp = client.post("/receipts/quick", data={
+        "csrf_token": token, "store": "plus", "purchased_on": "2026-09-20", "description": "Pastinaak",
+        "total": "0,99", "ean": ean,
+    })
+    assert resp.status_code == 303
+    assert "Pastinaak" in client.get(resp.headers["location"]).text
+
+    resp2 = client.post("/receipts/quick", data={
+        "csrf_token": token, "store": "plus", "purchased_on": "2026-09-21", "description": "",
+        "total": "1,19", "ean": ean,
+    })
+    assert resp2.status_code == 303
+    assert "Pastinaak" in client.get(resp2.headers["location"]).text
+
+
+def test_quick_add_with_an_invalid_barcode_is_rejected(session):
+    client, token = session
+    resp = client.post("/receipts/quick", data={
+        "csrf_token": token, "store": "plus", "purchased_on": "2026-09-20", "total": "1,00", "ean": "123",
+    })
+    assert resp.status_code == 400 and "barcode" in resp.text
 
 
 def test_quick_add_bakery_and_errors(session):

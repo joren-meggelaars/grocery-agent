@@ -114,7 +114,7 @@ def quick_form(
 ):
     stores = db.scalars(select(Store).order_by(Store.id)).all()
     values = {"store": store, "date": date.today().isoformat(), "description": "", "total": "",
-              "weight": "", **_quick_defaults(db, store)}
+              "weight": "", "ean": "", **_quick_defaults(db, store)}
     return _page(request, "receipts/quick.html", principal, stores=stores, values=values, errors=[])
 
 
@@ -144,7 +144,7 @@ async def quick_submit(
             receipt = await run_in_threadpool(
                 quick_add, db, store_chain=get("store"), purchased_on=purchased_on,
                 description=get("description"), total_cents=total, weight_milli=weight,
-                price_per_kg_cents=price_per_kg,
+                price_per_kg_cents=price_per_kg, ean_text=get("ean"), settings=request.app.state.settings,
             )
         except ConfirmError as exc:
             errors.extend(exc.messages)
@@ -153,7 +153,8 @@ async def quick_submit(
 
     stores = db.scalars(select(Store).order_by(Store.id)).all()
     values = {"store": get("store"), "date": get("purchased_on"), "description": get("description"),
-              "total": get("total"), "weight": get("weight"), "price_per_kg": get("price_per_kg")}
+              "total": get("total"), "weight": get("weight"), "price_per_kg": get("price_per_kg"),
+              "ean": get("ean")}
     return _page(request, "receipts/quick.html", principal, status=400, stores=stores, values=values, errors=errors)
 
 

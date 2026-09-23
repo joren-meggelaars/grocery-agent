@@ -10,6 +10,7 @@ from grocery.db.models import (
     Job,
     NameMapping,
     Product,
+    ProductEan,
     Receipt,
     ReceiptFile,
     Store,
@@ -29,7 +30,7 @@ from grocery.receipts.service import (
 )
 from grocery.uploads.images import UploadError
 from grocery.uploads.storage import _resolve
-from tests.fakes import FakeReader, failed, jpeg_bytes, line, plus_receipt
+from tests.fakes import FakeReader, ean13, failed, jpeg_bytes, line, off_found, off_missing, plus_receipt
 
 
 @pytest.fixture
@@ -419,6 +420,56 @@ def test_quick_add_validation(env, kw, message):
     args.update(kw)
     with pytest.raises(ConfirmError, match=message):
         quick_add(db, **args)
+
+
+def test_quick_add_with_a_barcode_and_a_typed_name_links_the_two(env):
+    settings, db = env
+    ean = ean13("871040001234")
+    r = quick_add(db, store_chain="plus", purchased_on=date(2026, 9, 20), description="Pastinaak",
+                  total_cents=99, ean_text=ean)
+    link = db.get(ProductEan, ean)
+    assert link is not None and link.product_id == r.lines[0].product_id and link.source == "scan"
+
+
+def test_quick_add_with_only_a_barcode_reuses_the_product_it_is_already_linked_to(env):
+    settings, db = env
+    ean = ean13("871040001234")
+    first = quick_add(db, store_chain="plus", purchased_on=date(2026, 9, 20), description="Pastinaak", total_cents=99, ean_text=ean)
+    second = quick_add(db, store_chain="plus", purchased_on=date(2026, 9, 21), description="", total_cents=119, ean_text=ean)
+    assert second.lines[0].product_id == first.lines[0].product_id
+    assert second.lines[0].raw_text == "Pastinaak"
+
+
+def test_an_unknown_barcode_without_a_name_is_looked_up_at_open_food_facts(env):
+    settings, db = env
+    ean = ean13("871040001234")
+    r = quick_add(db, store_chain="plus", purchased_on=date(2026, 9, 20), description="", total_cents=249,
+                  ean_text=ean, settings=settings, off_fetch=off_found(name="Goudse kaas"))
+    assert r.lines[0].raw_text == "Goudse kaas"
+    assert db.get(ProductEan, ean).product_id == r.lines[0].product_id
+
+
+def test_an_unknown_barcode_with_nothing_found_falls_back_to_the_store_default(env):
+    settings, db = env
+    ean = ean13("871040001234")
+    r = quick_add(db, store_chain="bakery", purchased_on=date(2026, 9, 20), description="", total_cents=395,
+                  ean_text=ean, settings=settings, off_fetch=off_missing())
+    assert r.lines[0].raw_text == "Brood"
+    assert db.get(ProductEan, ean).product_id == r.lines[0].product_id
+
+
+def test_a_bad_barcode_is_refused(env):
+    _, db = env
+    with pytest.raises(ConfirmError, match="barcode"):
+        quick_add(db, store_chain="bakery", purchased_on=date(2026, 9, 20), description="", total_cents=395, ean_text="123")
+
+
+def test_typing_a_different_name_repoints_an_existing_barcode(env):
+    settings, db = env
+    ean = ean13("871040001234")
+    quick_add(db, store_chain="plus", purchased_on=date(2026, 9, 20), description="Pastinaak", total_cents=99, ean_text=ean)
+    second = quick_add(db, store_chain="plus", purchased_on=date(2026, 9, 21), description="Winterpeen", total_cents=89, ean_text=ean)
+    assert db.get(ProductEan, ean).product_id == second.lines[0].product_id
 
 
 # --- job queue --------------------------------------------------------------

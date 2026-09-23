@@ -14,6 +14,7 @@ from grocery.db.models import (
     Extraction,
     NameMapping,
     Product,
+    ProductEan,
     Receipt,
     ReceiptFile,
     ReceiptLine,
@@ -25,6 +26,8 @@ from grocery.llm.client import ReadResult, ReceiptReader
 from grocery.llm.pricing import estimate_cost_eur
 from grocery.llm.schemas import ReceiptExtraction
 from grocery.prices.observations import delete_receipt_observations, record_receipt, set_pack_content
+from grocery.products.ean import clean_ean
+from grocery.products.off import Fetcher, http_fetch, lookup
 from grocery.products.matching import Match, MatchIndex
 from grocery.products.normalize import normalize_raw, product_key
 from grocery.receipts.validation import LineData, ValidationResult, expected_line_total, validate_receipt
@@ -443,6 +446,9 @@ def quick_add(
     total_cents: int | None,
     weight_milli: int | None = None,
     price_per_kg_cents: int | None = None,
+    ean_text: str = "",
+    settings: Settings | None = None,
+    off_fetch: Fetcher = http_fetch,
     now: datetime | None = None,
 ) -> Receipt:
     now = now or utcnow()
@@ -456,11 +462,32 @@ def quick_add(
     if total_cents is None or total_cents <= 0:
         raise ConfirmError(["Enter the amount, or a weight and a price per kg."])
 
-    name = " ".join(description.split())[:200] or QUICKADD_NAME.get(store_chain, "Groceries")
+    ean = None
+    if ean_text.strip():
+        ean = clean_ean(ean_text)
+        if ean is None:
+            raise ConfirmError(["The barcode number is not valid."])
+
+    name = " ".join(description.split())[:200]
+    if not name and ean:
+        # Nothing typed: reuse the product this barcode is already linked to, or ask Open Food Facts.
+        link = db.get(ProductEan, ean)
+        if link is not None:
+            name = link.product.name
+        elif settings is not None:
+            off = lookup(db, settings, ean, off_fetch, now)
+            name = off.name if off and off.name else None
+    name = name or QUICKADD_NAME.get(store_chain, "Groceries")
     category = db.scalar(
         select(Category).where(Category.name == QUICKADD_CATEGORY.get(store_chain, FALLBACK_CATEGORY))
     )
     product = _get_or_create_product(db, name, category.id if category else None)
+    if ean:
+        link = db.get(ProductEan, ean)
+        if link is None:
+            db.add(ProductEan(ean=ean, product_id=product.id, source="scan"))
+        elif link.product_id != product.id:
+            link.product_id = product.id  # the user's answer replaces the old link
     weighed = bool(weight_milli and price_per_kg_cents)
 
     receipt = Receipt(
