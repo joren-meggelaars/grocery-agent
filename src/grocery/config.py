@@ -53,6 +53,14 @@ class Settings(BaseSettings):
 
     timezone: str = "Europe/Amsterdam"  # for "today" when a capture has no explicit date
 
+    # --- Deals radar: weekly offers from PrijsProfeet, alerts through Home Assistant ---
+    # The user agent must not contain "bot", "crawler" or "spider": PrijsProfeet blocks keyless requests with those.
+    deals_user_agent: str = "GroceryAgent/1.0 (self-hosted, personal)"
+    prijsprofeet_api_key: SecretStr | None = None  # optional free key: 150 requests/min on the key instead of per IP
+    ha_url: str = ""  # e.g. http://10.0.20.20:8123
+    ha_token: SecretStr | None = None  # long-lived access token
+    ha_notify_service: str = ""  # e.g. notify.mobile_app_joren_iphone
+
     # --- Uploads and transient image storage ---
     files_dir: Path = Path("./data/files")
     max_upload_bytes: int = 15 * 1024 * 1024  # per file

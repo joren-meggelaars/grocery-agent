@@ -197,3 +197,29 @@ where SQL can decide, per-task model setting. To be measured from the logged tok
   instead of a Sign-out form, which needs a CSRF token.
 - Contrast was computed for 38 text/background pairs in both modes (all pass); the pages were checked in a headless browser
   at phone and desktop width, light and dark. A real iPhone has not seen it yet.
+
+## Phase 5 as built: deals radar (source: PrijsProfeet, alerts: Home Assistant)
+
+- **Source**: the PrijsProfeet public API, without a key (optional free key in `.env`). Terms v1.6 read on 2026-09-23: free use,
+  also for a personal tool; name PrijsProfeet wherever the data is shown (Deals page and notification carry it); prices shown as
+  current at most 24 h old (nightly refresh, expired offers hidden); do not walk the catalogue to copy it (we only ask about
+  products you buy plus a few categories); 30 requests/min per endpoint per IP (calls are spaced 3.5 s); user agents containing
+  "bot"/"crawler"/"spider" get a 403 (ours does not). Only the four chains you shop at are kept: Jumbo, Plus, Aldi, Lidl.
+  Aldi publishes the bundle total as its price: divided by the bundle size. Response shape checked against the live OpenAPI spec.
+- **What is asked** (`deals/service.py:build_plan`): one search per product you buy (receipts in the last year, or on the
+  products-at-home list; heavy-use first; at most 120) and, for the watched categories (default `huishouden`, `drogisterij`),
+  one query per category and chain with a minimum discount. Search hits that do not fuzzy-match the product (rapidfuzz >= 82)
+  are not stored.
+- **Two kinds of alert**: *mine* = a product you bought on 2+ receipts (or have at home) that is at least N% below your usual
+  paid price, compared per kg/l when the pack content is known, else per pack (flagged "check the pack size"); without a price
+  history a folder discount of at least the notable threshold counts. *Notable* = a watched category, discount >= N% and a saving
+  >= EUR M per item, for products with no history. Discounts above 75% are ignored (nearly always a data quirk).
+  All thresholds and the categories live on the Settings page.
+- **Running**: the worker's hourly housekeeping queues a refresh when the last one is 20 h old (6 h after a failure). A refresh is
+  a `deals_refresh` job that works off the plan in chunks of 10 questions and queues its own continuation, so receipt reading in
+  the same worker is never blocked for long. A 403/429/5xx/unreachable answer stops the run (circuit breaker). "Refresh now" on the
+  Deals page has a 30 minute cooldown.
+- **Alerts**: one Home Assistant notification per refresh for everything new (`notify.<service>` through the REST API); a deal is
+  alerted once (`alerted_at`); a failed send is retried on the next refresh. `.env`: `HA_URL`, `HA_TOKEN`, `HA_NOTIFY_SERVICE`.
+- **Not done**: product images (privacy/CSP), vision on folder PDFs (only if this source turns out too thin), cross-retailer EAN
+  matching (a paid PrijsProfeet tier), iOS web push (Home Assistant was chosen instead).

@@ -16,9 +16,11 @@ from sqlalchemy.orm import Session
 
 from grocery.config import Settings
 from grocery.db.models import Setting
+from grocery.deals.client import CATEGORY_SLUGS
 
 PREFIX = "app."
 EFFORT = ("low", "medium", "high")
+ONOFF = ("on", "off")
 
 
 @dataclass(frozen=True)
@@ -26,9 +28,11 @@ class Field:
     key: str
     label: str
     help: str
-    kind: str  # "int" | "float" | "str"
+    kind: str  # "int" | "float" | "str" | "choice"
     minimum: float | None = None
     maximum: float | None = None
+    choices: tuple[str, ...] = ()
+    optional: bool = False  # an empty value is allowed
 
 
 FIELDS = [
@@ -47,6 +51,29 @@ FIELDS = [
         "llm_monthly_budget_eur", "Claude API monthly budget (EUR)",
         "Hard stop for new extractions once this month's estimated cost reaches it.",
         "float", minimum=0, maximum=1000,
+    ),
+    Field("deals_enabled", "Deals radar", "Fetch the weekly offers of Jumbo, Plus, Aldi and Lidl every night.", "choice",
+          choices=ONOFF),
+    Field("deals_alerts", "Deal alerts", "Send a Home Assistant notification for new deals worth a look.", "choice",
+          choices=ONOFF),
+    Field(
+        "deals_mine_min_pct", "Your products: cheaper than usual by (%)",
+        "Alert for a product you buy when the offer is at least this much below what you usually pay.",
+        "int", minimum=1, maximum=90,
+    ),
+    Field(
+        "deals_notable_min_pct", "Rarely bought: discount of at least (%)",
+        "For the categories below: alert on offers with at least this discount, even for products you never bought.",
+        "int", minimum=10, maximum=90,
+    ),
+    Field(
+        "deals_notable_min_eur", "Rarely bought: saving of at least (EUR)",
+        "...and at least this much saved per item.", "float", minimum=0, maximum=100,
+    ),
+    Field(
+        "deals_categories", "Rarely bought: categories to watch",
+        "Comma separated: " + ", ".join(CATEGORY_SLUGS) + ". Empty switches this kind of alert off.",
+        "str", optional=True,
     ),
     Field(
         "confirmed_retention_days", "Keep photos after saving (days)",
@@ -70,6 +97,12 @@ class Effective:
     llm_monthly_budget_eur: float
     confirmed_retention_days: int
     unconfirmed_retention_days: int
+    deals_enabled: str
+    deals_alerts: str
+    deals_mine_min_pct: int
+    deals_notable_min_pct: int
+    deals_notable_min_eur: float
+    deals_categories: str
 
 
 class SettingsError(ValueError):
@@ -86,6 +119,12 @@ def _defaults(settings: Settings) -> dict[str, object]:
         "llm_monthly_budget_eur": settings.llm_monthly_budget_eur,
         "confirmed_retention_days": settings.confirmed_retention_days,
         "unconfirmed_retention_days": settings.unconfirmed_retention_days,
+        "deals_enabled": "on",
+        "deals_alerts": "on",
+        "deals_mine_min_pct": 10,
+        "deals_notable_min_pct": 30,
+        "deals_notable_min_eur": 2.0,
+        "deals_categories": "huishouden,drogisterij",
     }
 
 
@@ -105,9 +144,12 @@ def effective(db: Session, settings: Settings) -> Effective:
         if field is None:
             continue  # a row this version of the app does not know: ignore rather than crash
         try:
-            values[field.key] = _cast(field, row.value)
+            value = _cast(field, row.value)
         except ValueError:
             continue  # a corrupted row must never break the app; fall back to the default
+        if field.kind == "choice" and value not in field.choices:
+            continue
+        values[field.key] = value
     return Effective(**values)
 
 
@@ -124,13 +166,25 @@ def parse_and_save(db: Session, settings: Settings, form) -> Effective:
     to_save: dict[str, str] = {}
     for field in FIELDS:
         raw = (form.get(field.key) or "").strip()
-        if not raw:
+        if not raw and not field.optional:
             errors.append(f"{field.label}: enter a value.")
             continue
-        if field.kind == "str":
+        if field.kind == "choice":
+            if raw not in field.choices:
+                errors.append(f"{field.label}: choose {' or '.join(field.choices)}.")
+                continue
+            to_save[field.key] = raw
+        elif field.kind == "str":
             if field.key == "timezone" and not _valid_timezone(raw):
                 errors.append(f"{field.label}: not a known timezone name.")
                 continue
+            if field.key == "deals_categories":
+                slugs = [p.strip().lower() for p in raw.split(",") if p.strip()]
+                unknown = [p for p in slugs if p not in CATEGORY_SLUGS]
+                if unknown:
+                    errors.append(f"{field.label}: unknown category {', '.join(unknown)}.")
+                    continue
+                raw = ",".join(dict.fromkeys(slugs))
             to_save[field.key] = raw
         else:
             try:

@@ -1,15 +1,21 @@
 """Job dispatch. process_one() is what the worker loop calls; tests call it directly."""
 
 import logging
+import time
 from collections.abc import Callable
 from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from grocery.capture.service import run_capture
+from grocery.capture.service import local_date, run_capture
 from grocery.config import Settings
-from grocery.db.models import CupboardScan, Job, Receipt, ShelfCapture
+from grocery.db.base import utcnow
+from grocery.db.models import CupboardScan, DealRun, Job, Receipt, ShelfCapture
+from grocery.deals import service as deals
+from grocery.deals.client import Fetcher as DealsFetcher
+from grocery.deals.client import PrijsProfeet, http_get
+from grocery.settings_store import effective
 from grocery.jobs import queue
 from grocery.llm.client import ImageReader, ReaderUnavailable, make_shelf_reader
 from grocery.products.off import Fetcher, http_fetch, lookup
@@ -84,6 +90,28 @@ def _lookup_ean(db: Session, settings: Settings, job: Job, off_fetch: Fetcher, n
     queue.complete(db, job, now)
 
 
+def _deals_refresh(
+    db: Session, settings: Settings, job: Job, deals_fetch: DealsFetcher, ha_post: deals.HaPost, sleep, now
+) -> None:
+    """One chunk of the nightly offers refresh; a run that is not finished queues its own next chunk."""
+    now = now or utcnow()
+    eff = effective(db, settings)
+    if eff.deals_enabled != "on":
+        queue.complete(db, job, now)
+        return
+    today = local_date(now, eff.timezone)
+    run = db.get(DealRun, job.payload.get("run_id")) if job.payload.get("run_id") else None
+    if run is None or run.status != "running":
+        run = deals.start_run(db, eff, today, now)
+    key = settings.prijsprofeet_api_key.get_secret_value() if settings.prijsprofeet_api_key else None
+    source = PrijsProfeet(settings.deals_user_agent, key, fetch=deals_fetch, sleep=sleep)
+    if deals.run_chunk(db, run, source, eff, now) or not run.plan:
+        deals.finish_run(db, run, settings, eff, today, now, ha_post)
+    else:
+        queue.enqueue(db, deals.JOB_KIND, {"run_id": run.id}, now)
+    queue.complete(db, job, now)
+
+
 def process_one(
     db: Session,
     settings: Settings,
@@ -92,6 +120,9 @@ def process_one(
     *,
     shelf_reader_factory: ReaderFactory = make_shelf_reader,
     off_fetch: Fetcher = http_fetch,
+    deals_fetch: DealsFetcher = http_get,
+    ha_post: deals.HaPost = deals.ha_post,
+    sleep=time.sleep,
 ) -> bool:
     """Run the next due job. Returns False when there was nothing to do."""
     job = queue.claim_next(db, now)
@@ -102,6 +133,8 @@ def process_one(
             _extract_receipt(db, settings, job, reader_factory, now)
         elif job.kind == "process_capture":
             _process_capture(db, settings, job, shelf_reader_factory, off_fetch, now)
+        elif job.kind == deals.JOB_KIND:
+            _deals_refresh(db, settings, job, deals_fetch, ha_post, sleep, now)
         elif job.kind == "lookup_ean":
             _lookup_ean(db, settings, job, off_fetch, now)
         else:

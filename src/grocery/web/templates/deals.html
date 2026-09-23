@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Deals - Grocery Agent{% endblock %}
+{% macro deal_card(d, stores) %}
+<li class="card deal">
+  <div class="regular-head">
+    <strong>{{ d.name }}</strong>
+    <span class="regular-count">EUR {{ "%.2f"|format(d.price_cents / 100) }}</span>
+  </div>
+  <p class="muted">{{ stores.get(d.retailer, d.retailer) }}
+    {% if d.original_price_cents %}&middot; was EUR {{ "%.2f"|format(d.original_price_cents / 100) }}{% endif %}
+    {% if d.promo_text %}&middot; {{ d.promo_text }}{% endif %}
+    {% if d.buy_quantity %}&middot; buy {{ d.buy_quantity }}{% endif %}
+    {% if d.valid_until %}&middot; until {{ d.valid_until.strftime("%d %b") }}{% endif %}</p>
+  <p class="cheaper"><strong>{{ d.reason }}</strong>
+    {% if d.usual_price_cents %}<span class="muted">(you usually pay EUR {{ "%.2f"|format(d.usual_price_cents / 100) }})</span>{% endif %}</p>
+  {% if d.size_unverified %}<p class="muted">Check that the pack size is the same as the one you buy.</p>{% endif %}
+  {% if d.loyalty_price_cents %}<p class="muted">EUR {{ "%.2f"|format(d.loyalty_price_cents / 100) }} with {{ d.loyalty_program }}.</p>{% endif %}
+  {% if d.in_store_only %}<p class="muted">In the shop only.</p>{% endif %}
+  {% if d.product_url %}<p><a href="{{ d.product_url }}" rel="noopener noreferrer" target="_blank">Open at {{ stores.get(d.retailer, d.retailer) }}</a></p>{% endif %}
+</li>
+{% endmacro %}
+{% block content %}
+<p><a href="/">&larr; Home</a></p>
+<h1>Deals</h1>
+<p class="muted">This week's offers at Jumbo, Plus, Aldi and Lidl that are worth a look, based on what you buy.
+  Prices are indicative: check them at the shop.</p>
+{% if notice %}<p class="card" role="status">{{ notice }}</p>{% endif %}
+{% if eff.deals_enabled != "on" %}<p class="alert">The deals radar is switched off. Turn it on in <a href="/settings">Settings</a>.</p>{% endif %}
+{% if eff.deals_alerts == "on" and not ha_ready %}<p class="card">Alerts need Home Assistant: set HA_URL, HA_TOKEN and HA_NOTIFY_SERVICE in .env on the server.</p>{% endif %}
+
+<h2>For you</h2>
+{% if mine %}<ul class="list">{% for d in mine %}{{ deal_card(d, stores) }}{% endfor %}</ul>
+{% else %}<p class="card">Nothing this week is clearly cheaper than what you usually pay.</p>{% endif %}
+
+<h2>Worth a look</h2>
+{% if notable %}<ul class="list">{% for d in notable %}{{ deal_card(d, stores) }}{% endfor %}</ul>
+{% else %}<p class="card">No big discounts in the categories you watch ({{ eff.deals_categories.replace(",", ", ") or "none" }}).</p>{% endif %}
+
+<p class="muted spaced">
+  {% if last %}Last refresh: {{ (last.finished_at or last.started_at)|localtime("%d %b %H:%M") }}
+    ({% if last.status == "ok" %}done{% elif last.status == "failed" %}failed: {{ last.error or "unknown" }}{% else %}running{% endif %},
+    {{ last.calls }} questions to the source). {{ total }} offers known.
+  {% else %}Not refreshed yet: it runs every night, or press the button.{% endif %}
+</p>
+<form method="post" action="/deals/refresh" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="btn">Refresh now</button>
+</form>
+<p class="muted spaced">Offers and prices: <a href="https://www.prijsprofeet.nl" rel="noopener noreferrer" target="_blank">PrijsProfeet</a>.
+  Not affiliated with any supermarket.</p>
+{% endblock %}

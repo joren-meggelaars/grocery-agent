@@ -27,6 +27,7 @@
    else "overview" if path == "/overview"
    else "regulars" if path == "/regulars"
    else "cupboard" if path.startswith("/cupboard")
+   else "deals" if path == "/deals"
    else "settings" if path == "/settings"
    else "account" if path == "/account"
    else "home" if path == "/" else "" %}
@@ -57,6 +58,7 @@
       {{ nav_item(here, "overview", "/overview", "chart", "Monthly overview") }}
       {{ nav_item(here, "regulars", "/regulars", "star", "What I buy most") }}
       {{ nav_item(here, "cupboard", "/cupboard", "box", "Products at home") }}
+      {{ nav_item(here, "deals", "/deals", "tag", "Deals") }}
     </nav>
     <div class="sidebar-foot nav">
       {{ nav_item(here, "settings", "/settings", "settings", "Settings") }}

@@ -12,9 +12,15 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   {% for f in fields %}
   <label for="{{ f.key }}">{{ f.label }}</label>
-  <input id="{{ f.key }}" name="{{ f.key }}" type="text"
+  {% if f.kind == "choice" %}
+  <select id="{{ f.key }}" name="{{ f.key }}">
+    {% for c in f.choices %}<option value="{{ c }}" {{ "selected" if values[f.key] == c }}>{{ c|capitalize }}</option>{% endfor %}
+  </select>
+  {% else %}
+  <input id="{{ f.key }}" name="{{ f.key }}" type="text" autocomplete="off"
          inputmode="{{ 'numeric' if f.kind == 'int' else 'decimal' if f.kind == 'float' else 'text' }}"
          value="{{ values[f.key] }}">
+  {% endif %}
   {% if f.help %}<p class="muted">{{ f.help }}</p>{% endif %}
   {% endfor %}
   <button type="submit" class="btn primary big">Save</button>

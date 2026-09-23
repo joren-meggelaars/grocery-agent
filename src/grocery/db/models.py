@@ -358,3 +358,68 @@ class PriceObservation(Base):
 
     store: Mapped[Store] = relationship()
     product: Mapped[Product | None] = relationship()
+
+
+class DealRun(Base):
+    """One refresh of the weekly offers. The plan (which questions to ask the source) is worked off in small
+    chunks, so a long refresh never blocks receipt reading in the same worker."""
+
+    __tablename__ = "deal_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    status: Mapped[str] = mapped_column(String(10), default="running")  # running | ok | failed
+    plan: Mapped[list] = mapped_column(JSONType)
+    cursor: Mapped[int] = mapped_column(Integer, default=0)
+    calls: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text)
+    stats: Mapped[dict | None] = mapped_column(JSONType)
+
+
+class Deal(Base):
+    """An offer from a folder source, with why it is (or is not) worth a look."""
+
+    __tablename__ = "deals"
+    __table_args__ = (
+        UniqueConstraint("source", "external_id", name="uq_deals_source_external"),
+        Index("ix_deals_valid_until", "valid_until"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source: Mapped[str] = mapped_column(String(16))
+    external_id: Mapped[str] = mapped_column(String(80))
+    retailer: Mapped[str] = mapped_column(String(16))  # jumbo | plus | aldi | lidl
+    name: Mapped[str] = mapped_column(String(300))
+    brand: Mapped[str | None] = mapped_column(String(100))
+    ean: Mapped[str | None] = mapped_column(String(14))
+    category: Mapped[str | None] = mapped_column(String(40))
+    price_cents: Mapped[int] = mapped_column(Integer)  # what one item costs in the offer
+    original_price_cents: Mapped[int | None] = mapped_column(Integer)
+    savings_pct: Mapped[float | None] = mapped_column(Float)
+    savings_cents: Mapped[int | None] = mapped_column(Integer)
+    promo_type: Mapped[str | None] = mapped_column(String(20))
+    promo_text: Mapped[str | None] = mapped_column(String(200))
+    buy_quantity: Mapped[int | None] = mapped_column(Integer)  # items you must take, e.g. 2 for 1+1
+    bundle_price_cents: Mapped[int | None] = mapped_column(Integer)
+    unit_price_cents: Mapped[int | None] = mapped_column(Integer)
+    unit_basis: Mapped[str | None] = mapped_column(String(4))  # kg | l
+    quantity_text: Mapped[str | None] = mapped_column(String(60))
+    loyalty_price_cents: Mapped[int | None] = mapped_column(Integer)
+    loyalty_program: Mapped[str | None] = mapped_column(String(40))
+    in_store_only: Mapped[bool | None] = mapped_column(Boolean)
+    product_url: Mapped[str | None] = mapped_column(String(500))
+    valid_from: Mapped[date | None] = mapped_column(Date)
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    last_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+    matched_product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"))
+    match_score: Mapped[float | None] = mapped_column(Float)
+    relevance: Mapped[str | None] = mapped_column(String(10))  # mine | notable
+    usual_price_cents: Mapped[int | None] = mapped_column(Integer)
+    vs_usual_pct: Mapped[float | None] = mapped_column(Float)
+    reason: Mapped[str | None] = mapped_column(String(200))
+    size_unverified: Mapped[bool] = mapped_column(Boolean, default=False)
+    alerted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    product: Mapped[Product | None] = relationship()

@@ -8,6 +8,8 @@ from tests.conftest import csrf_of, login
 FORM = {
     "cycle_start_day": "23", "monthly_reference_eur": "450", "timezone": "Europe/Amsterdam",
     "llm_monthly_budget_eur": "7.5", "confirmed_retention_days": "10", "unconfirmed_retention_days": "20",
+    "deals_enabled": "on", "deals_alerts": "off", "deals_mine_min_pct": "15", "deals_notable_min_pct": "40",
+    "deals_notable_min_eur": "2,50", "deals_categories": "huishouden, Drogisterij",
 }
 
 
@@ -82,7 +84,35 @@ def test_nothing_is_saved_when_one_field_is_invalid(db, client):
 
 def test_every_field_has_a_label_and_a_kind():
     for f in FIELDS:
-        assert f.label and f.kind in ("int", "float", "str")
+        assert f.label and f.kind in ("int", "float", "str", "choice")
+
+
+def test_the_deal_settings_are_saved_in_canonical_form(db, client):
+    eff = parse_and_save(db, client.app.state.settings, FORM)
+    assert (eff.deals_enabled, eff.deals_alerts) == ("on", "off")
+    assert (eff.deals_mine_min_pct, eff.deals_notable_min_pct, eff.deals_notable_min_eur) == (15, 40, 2.5)
+    assert eff.deals_categories == "huishouden,drogisterij"  # trimmed, lower-cased
+
+
+def test_deal_categories_may_be_empty_to_switch_that_alert_off(db, client):
+    eff = parse_and_save(db, client.app.state.settings, {**FORM, "deals_categories": ""})
+    assert eff.deals_categories == ""
+
+
+@pytest.mark.parametrize("key,bad,message", [
+    ("deals_enabled", "maybe", "choose on or off"), ("deals_alerts", "", "enter a value"),
+    ("deals_categories", "huishouden,speelgoed", "unknown category speelgoed"),
+    ("deals_notable_min_pct", "5", "between"), ("deals_mine_min_pct", "0", "between"),
+])
+def test_invalid_deal_settings_are_rejected(db, client, key, bad, message):
+    with pytest.raises(SettingsError, match=message):
+        parse_and_save(db, client.app.state.settings, {**FORM, key: bad})
+
+
+def test_a_corrupted_choice_row_falls_back_to_the_default(db, client):
+    db.add(Setting(key="app.deals_enabled", value="perhaps"))
+    db.commit()
+    assert effective(db, client.app.state.settings).deals_enabled == "on"
 
 
 # --- the /settings page -------------------------------------------------------
