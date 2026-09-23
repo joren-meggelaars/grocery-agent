@@ -337,3 +337,10 @@ details > summary { cursor: pointer; padding: 0.7rem 0; font-weight: 600; }
 .pack-ask { margin: 0.75rem 0; padding: 0.75rem; border-left: 3px solid var(--accent-line); background: var(--primary-soft); border-radius: var(--radius-sm); }
 .pack-ask p { margin: 0 0 0.5rem; }
 .alt { display: inline; }
+
+/* short message over the camera view (scan at home) */
+.toast { position: fixed; z-index: 40; left: 16px; right: 16px; top: calc(env(safe-area-inset-top) + 68px); margin: 0 auto; max-width: 480px;
+         padding: 0.85rem 1.1rem; border-radius: var(--radius); background: var(--sidebar); color: #fff; font-weight: 600; text-align: center;
+         box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.14); }
+.toast.good { background: #0f5f2c; border-color: #4ade80; }
+.toast.bad { background: #8a1c1c; border-color: #fca5a5; }

@@ -17,7 +17,7 @@
   <summary>Add a product without a barcode</summary>
   <form method="post" action="/cupboard/add" class="stack">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <label>Product<input type="text" name="product" list="products" maxlength="200" autocomplete="off" required></label>
+    <label>Product<input type="text" name="product" list="products" maxlength="200" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore data-lpignore="true" required></label>
     <label>Category
       <select name="category"><option value="">-</option>
         {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}

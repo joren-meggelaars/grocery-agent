@@ -443,3 +443,28 @@ def test_the_scanner_supports_continuous_mode_without_repeating_a_held_barcode()
 
     js = (Path(__file__).resolve().parent.parent / "src/grocery/web/static/js/scanner.js").read_text(encoding="utf-8")
     assert "options.continuous" in js and "lastAt = now" in js  # seeing a code again refreshes its timer
+
+
+# --- toast while scanning, and no iPhone suggestions on the name fields -----------------------
+
+def test_the_scan_page_has_a_toast_that_the_script_fills_for_every_result(session):
+    from pathlib import Path
+
+    client, _ = session
+    assert 'id="cb-toast"' in client.get("/cupboard/scan").text
+    js = (Path(__file__).resolve().parent.parent / "src/grocery/web/static/js/cupboard_scan.js").read_text(encoding="utf-8")
+    assert 'show("Found: " + name, "good")' in js  # a found product is announced
+    assert "function show(text, kind) {\n    toast(text, kind);" in js  # every list message is also a toast
+    assert 'toast("Barcode " + ean + " seen' in js  # instant feedback before the server answers
+
+
+def test_the_product_name_fields_switch_off_ios_suggestions(session, db):
+    client, token = session
+    resp = client.post("/api/cupboard/scan", data={"ean": EAN}, headers={"X-CSRF-Token": token})
+    assert resp.status_code == 200
+    run_jobs((client.app.state.settings, db), off=off_missing())
+    for path in ("/cupboard/name", "/cupboard"):
+        page = client.get(path).text
+        field = page.split('name="product"', 1)[1].split(">", 1)[0]
+        for attr in ('autocomplete="off"', 'autocorrect="off"', 'autocapitalize="off"', 'spellcheck="false"'):
+            assert attr in field, (path, attr)

@@ -6,7 +6,19 @@
 
   var added = 0, waiting = parseInt($("cb-waiting").textContent, 10) || 0;
 
+  // A toast over the camera view: while a product is held in front of the lens the list below is out of sight.
+  var toastTimer = null;
+  function toast(text, kind) {
+    var el = $("cb-toast");
+    el.textContent = text; // text only, like the list
+    el.className = "toast " + (kind || "");
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.hidden = true; }, kind === "bad" ? 4000 : 2500);
+  }
+
   function show(text, kind) {
+    toast(text, kind);
     var li = document.createElement("li");
     li.className = "card scan-result " + (kind || "");
     li.textContent = text; // text only: names come from the database or Open Food Facts
@@ -23,6 +35,7 @@
   }
 
   function send(ean) {
+    toast("Barcode " + ean + " seen, looking it up...");
     return token().then(function (t) {
       if (!t) { show("You are signed out. Sign in again and continue.", "bad"); return; }
       return fetch("/api/cupboard/scan", {
@@ -33,7 +46,7 @@
         .then(function (res) {
           if (!res.ok) { show((res.data && res.data.error) || "Could not add that barcode.", "bad"); return; }
           var kind = res.data.result, name = res.data.name;
-          if (kind === "added") { added += 1; show("Added: " + name, "good"); }
+          if (kind === "added") { added += 1; show("Found: " + name, "good"); }
           else if (kind === "already") { show("Already on the list: " + name); }
           else if (kind === "unknown") { waiting += 1; show("New barcode " + ean + ": name it afterwards."); }
           else { show("Barcode " + ean + " is already waiting for a name."); }
