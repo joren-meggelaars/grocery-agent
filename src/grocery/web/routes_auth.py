@@ -11,6 +11,7 @@ from grocery.security import ratelimit
 from grocery.security.deps import Principal, current_principal, get_db, public
 from grocery.security.passwords import hash_password, needs_rehash, verify_password
 from grocery.security.sessions import create_session, revoke_all, revoke_session
+from grocery.settings_store import effective
 from grocery.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -141,6 +142,7 @@ def account(
         .where(AuthSession.user_id == principal.user.id)
         .order_by(AuthSession.last_seen.desc())
     ).all()
+    templates.env.globals["app_timezone"] = effective(db, request.app.state.settings).timezone
     return templates.TemplateResponse(
         request,
         "account.html",

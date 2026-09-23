@@ -22,9 +22,10 @@ def month_spend_eur(db: Session, now: datetime | None = None) -> float:
     return float(total or 0.0)
 
 
-def budget_state(db: Session, settings: Settings, now: datetime | None = None) -> dict:
+def budget_state(db: Session, settings: Settings, now: datetime | None = None, cap: float | None = None) -> dict:
+    """cap overrides settings.llm_monthly_budget_eur, for the value the Settings page may have set."""
     spent = month_spend_eur(db, now)
-    cap = settings.llm_monthly_budget_eur
+    cap = settings.llm_monthly_budget_eur if cap is None else cap
     ratio = spent / cap if cap > 0 else 1.0
     return {
         "spent": spent,

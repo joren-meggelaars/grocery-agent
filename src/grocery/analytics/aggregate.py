@@ -92,6 +92,31 @@ def days_in_month(month: date) -> int:
     return (add_months(month, 1) - month).days
 
 
+# --- the spending cycle: a calendar month by default, or payday to payday ---------------------
+
+def cycle_start(anchor: date, start_day: int) -> date:
+    """The date the cycle labelled by anchor's calendar month begins on.
+
+    start_day is clamped to the days that month actually has, so day 30 or 31 still works in
+    February. start_day=1 makes a cycle the same as a calendar month.
+    """
+    return anchor.replace(day=min(start_day, days_in_month(first_of_month(anchor))))
+
+
+def cycle_bounds(anchor: date, start_day: int) -> tuple[date, date]:
+    """[start, end) of the cycle labelled by anchor's calendar month."""
+    start = cycle_start(anchor, start_day)
+    return start, cycle_start(add_months(first_of_month(anchor), 1), start_day)
+
+
+def current_cycle_anchor(today: date, start_day: int) -> date:
+    """The calendar month that labels the cycle `today` falls in."""
+    anchor = first_of_month(today)
+    if today.day < cycle_start(anchor, start_day).day:
+        anchor = add_months(anchor, -1)
+    return anchor
+
+
 # --- attribution and summary -------------------------------------------------
 
 def attribute(lines: tuple[LineFact, ...] | list[LineFact]) -> list[tuple[int | None, int]]:
@@ -114,9 +139,9 @@ def _fallback_id(categories: dict[int, CategoryMeta]) -> int | None:
 
 
 def summarize_month(
-    receipts: list[ReceiptFact], categories: dict[int, CategoryMeta], month: date
+    receipts: list[ReceiptFact], categories: dict[int, CategoryMeta], month: date, start_day: int = 1
 ) -> MonthSummary:
-    start, end = first_of_month(month), add_months(first_of_month(month), 1)
+    start, end = cycle_bounds(month, start_day)
     fallback = _fallback_id(categories)
     per_category: dict[int | None, int] = defaultdict(int)
     per_store: dict[str, int] = defaultdict(int)
@@ -158,14 +183,15 @@ def summarize_month(
 
 
 def month_series(
-    receipts: list[ReceiptFact], categories: dict[int, CategoryMeta], last_month: date, months: int = 6
+    receipts: list[ReceiptFact], categories: dict[int, CategoryMeta], last_month: date, months: int = 6,
+    start_day: int = 1,
 ) -> list[MonthPoint]:
-    """The last `months` calendar months ending at last_month, oldest first, empty months included as zero."""
+    """The last `months` cycles ending at last_month, oldest first, empty cycles included as zero."""
     points = []
     for offset in range(months - 1, -1, -1):
         month = add_months(first_of_month(last_month), -offset)
-        s = summarize_month(receipts, categories, month)
-        points.append(MonthPoint(month, s.total_cents, s.food_cents, s.receipts))
+        s = summarize_month(receipts, categories, month, start_day)
+        points.append(MonthPoint(s.month, s.total_cents, s.food_cents, s.receipts))
     return points
 
 
@@ -210,12 +236,15 @@ def against_reference(food_cents: int, reference_cents: int) -> Reference:
     return Reference(reference_cents, used, reference_cents - food_cents, state)
 
 
-def project_month_end(food_cents: int, month: date, today: date) -> int | None:
-    """Food spend at the current pace, only for the running month and once a week of data exists."""
-    month = first_of_month(month)
-    if first_of_month(today) != month or today.day < PROJECTION_MIN_DAYS:
+def project_month_end(food_cents: int, month: date, today: date, start_day: int = 1) -> int | None:
+    """Food spend at the current pace, only for the running cycle and once a week of data exists."""
+    start, end = cycle_bounds(month, start_day)
+    if not (start <= today < end):
         return None
-    return round(food_cents / today.day * days_in_month(month))
+    elapsed = (today - start).days + 1
+    if elapsed < PROJECTION_MIN_DAYS:
+        return None
+    return round(food_cents / elapsed * (end - start).days)
 
 
 # --- regulars ----------------------------------------------------------------
@@ -235,9 +264,9 @@ class ProductStat:
 PERIODS = {"month": "This month", "3m": "Last 3 months", "12m": "Last 12 months", "all": "All time"}
 
 
-def period_start(period: str, today: date) -> date | None:
+def period_start(period: str, today: date, start_day: int = 1) -> date | None:
     if period == "month":
-        return first_of_month(today)
+        return cycle_start(current_cycle_anchor(today, start_day), start_day)
     if period == "3m":
         return today - timedelta(days=90)
     if period == "12m":

@@ -27,6 +27,7 @@
    else "overview" if path == "/overview"
    else "regulars" if path == "/regulars"
    else "cupboard" if path.startswith("/cupboard")
+   else "settings" if path == "/settings"
    else "account" if path == "/account"
    else "home" if path == "/" else "" %}
 {% macro nav_item(here, key, href, icon, label) -%}
@@ -58,6 +59,7 @@
       {{ nav_item(here, "cupboard", "/cupboard", "box", "Products at home") }}
     </nav>
     <div class="sidebar-foot nav">
+      {{ nav_item(here, "settings", "/settings", "settings", "Settings") }}
       {{ nav_item(here, "account", "/account", "user", "Account") }}
       {% if csrf_token %}
       <form method="post" action="/logout">

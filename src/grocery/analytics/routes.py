@@ -1,5 +1,5 @@
 import re
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -10,8 +10,8 @@ from grocery.analytics.aggregate import (
     PERIODS,
     add_months,
     against_reference,
-    days_in_month,
-    first_of_month,
+    current_cycle_anchor,
+    cycle_bounds,
     month_series,
     period_start,
     project_month_end,
@@ -24,6 +24,7 @@ from grocery.capture.service import local_date
 from grocery.db.base import utcnow
 from grocery.prices.feedback import price_overview
 from grocery.security.deps import Principal, current_principal, get_db
+from grocery.settings_store import effective
 from grocery.web.templating import templates
 
 router = APIRouter()
@@ -31,9 +32,8 @@ _MONTH = re.compile(r"^(\d{4})-(\d{2})$")
 TREND_MONTHS = 6
 
 
-def parse_month(value: str | None, today: date) -> date:
-    """A YYYY-MM query value, clamped to the current month; anything else means the current month."""
-    current = first_of_month(today)
+def parse_month(value: str | None, current: date) -> date:
+    """A YYYY-MM query value, clamped to the current cycle's anchor month; anything else means the current cycle."""
     match = _MONTH.match(value or "")
     if not match:
         return current
@@ -51,16 +51,19 @@ def overview(
     db: Session = Depends(get_db),
 ):
     settings = request.app.state.settings
-    today = local_date(utcnow(), settings.timezone)
-    selected = parse_month(month, today)
-    current = first_of_month(today)
-
-    receipts = load_receipts(db, since=add_months(selected, -(TREND_MONTHS - 1)), until=add_months(selected, 1))
-    categories = load_categories(db)
-    summary = summarize_month(receipts, categories, selected)
-    series = month_series(receipts, categories, selected, TREND_MONTHS)
-    reference_cents = round(settings.monthly_reference_eur * 100)
+    eff = effective(db, settings)
+    today = local_date(utcnow(), eff.timezone)
+    current = current_cycle_anchor(today, eff.cycle_start_day)
+    selected = parse_month(month, current)
     is_current = selected == current
+
+    window_start, _ = cycle_bounds(add_months(selected, -(TREND_MONTHS - 1)), eff.cycle_start_day)
+    _, cycle_end = cycle_bounds(selected, eff.cycle_start_day)
+    receipts = load_receipts(db, since=window_start, until=cycle_end)
+    categories = load_categories(db)
+    summary = summarize_month(receipts, categories, selected, eff.cycle_start_day)
+    series = month_series(receipts, categories, selected, TREND_MONTHS, eff.cycle_start_day)
+    reference_cents = round(eff.monthly_reference_eur * 100)
 
     return templates.TemplateResponse(
         request,
@@ -68,13 +71,15 @@ def overview(
         {
             "user": principal.user,
             "month": selected,
+            "cycle_start": summary.month,
+            "cycle_last_day": cycle_end - timedelta(days=1),
             "prev_month": add_months(selected, -1).strftime("%Y-%m"),
             "next_month": add_months(selected, 1).strftime("%Y-%m") if selected < current else None,
             "summary": summary,
             "trend": trend(series),
             "reference": against_reference(summary.food_cents, reference_cents),
-            "projection": project_month_end(summary.food_cents, selected, today),
-            "days_left": days_in_month(selected) - today.day if is_current else None,
+            "projection": project_month_end(summary.food_cents, selected, today, eff.cycle_start_day),
+            "days_left": (cycle_end - today).days - 1 if is_current else None,
             "series": series,
             "trend_chart": charts.column_chart(series, reference_cents),
             "category_chart": charts.bar_chart(summary.by_category, "Spend per category this month"),
@@ -92,8 +97,9 @@ def regulars(
     db: Session = Depends(get_db),
 ):
     period = period if period in PERIODS else "3m"
-    today = local_date(utcnow(), request.app.state.settings.timezone)
-    since = period_start(period, today)
+    eff = effective(db, request.app.state.settings)
+    today = local_date(utcnow(), eff.timezone)
+    since = period_start(period, today, eff.cycle_start_day)
     stats, unmatched = top_products(load_receipts(db, since=since), since)
     overview = price_overview(db, [s.product_id for s in stats], today)
     return templates.TemplateResponse(

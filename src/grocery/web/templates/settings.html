@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Settings - Grocery Agent{% endblock %}
+{% block content %}
+<p><a href="/">&larr; Home</a></p>
+<h1>Settings</h1>
+<p class="muted">A few things you can change without touching the server. Takes effect immediately, for everything
+  except the Claude reading model and effort, which are not here (they only apply to a background worker that has
+  already started, so they still live in .env).</p>
+{% for e in errors %}<p class="alert" role="alert">{{ e }}</p>{% endfor %}
+{% if saved %}<p class="card" role="status">Saved.</p>{% endif %}
+<form method="post" action="/settings" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% for f in fields %}
+  <label for="{{ f.key }}">{{ f.label }}</label>
+  <input id="{{ f.key }}" name="{{ f.key }}" type="text"
+         inputmode="{{ 'numeric' if f.kind == 'int' else 'decimal' if f.kind == 'float' else 'text' }}"
+         value="{{ values[f.key] }}">
+  {% if f.help %}<p class="muted">{{ f.help }}</p>{% endif %}
+  {% endfor %}
+  <button type="submit" class="btn primary big">Save</button>
+</form>
+{% endblock %}

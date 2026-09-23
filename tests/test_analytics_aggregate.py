@@ -11,6 +11,9 @@ from grocery.analytics.aggregate import (
     add_months,
     against_reference,
     attribute,
+    current_cycle_anchor,
+    cycle_bounds,
+    cycle_start,
     days_in_month,
     month_series,
     period_start,
@@ -55,6 +58,38 @@ def test_add_months_crosses_year_boundaries():
 
 def test_days_in_month_including_leap_february():
     assert (days_in_month(date(2026, 2, 1)), days_in_month(date(2028, 2, 1)), days_in_month(SEP)) == (28, 29, 30)
+
+
+# --- the spending cycle: payday to payday -----------------------------------
+
+def test_a_cycle_starting_on_day_one_is_a_calendar_month():
+    assert cycle_start(SEP, 1) == SEP
+    assert cycle_bounds(SEP, 1) == (SEP, date(2026, 10, 1))
+
+
+def test_a_cycle_can_start_on_any_other_day():
+    assert cycle_start(SEP, 23) == date(2026, 9, 23)
+    assert cycle_bounds(SEP, 23) == (date(2026, 9, 23), date(2026, 10, 23))
+
+
+def test_a_late_start_day_is_clamped_to_the_days_february_has():
+    assert cycle_start(date(2026, 2, 1), 31) == date(2026, 2, 28)
+    assert cycle_start(date(2028, 2, 1), 31) == date(2028, 2, 29)  # leap year
+
+
+def test_current_cycle_anchor_is_this_month_once_payday_has_passed():
+    assert current_cycle_anchor(date(2026, 9, 23), 23) == SEP
+    assert current_cycle_anchor(date(2026, 9, 30), 23) == SEP
+
+
+def test_current_cycle_anchor_is_last_month_before_payday():
+    assert current_cycle_anchor(date(2026, 9, 22), 23) == date(2026, 8, 1)
+    assert current_cycle_anchor(date(2026, 9, 1), 23) == date(2026, 8, 1)
+
+
+def test_current_cycle_anchor_with_a_calendar_month_is_todays_month():
+    assert current_cycle_anchor(date(2026, 9, 1), 1) == SEP
+    assert current_cycle_anchor(date(2026, 9, 30), 1) == SEP
 
 
 # --- attribution ------------------------------------------------------------
@@ -158,6 +193,24 @@ def test_series_is_oldest_first_with_zero_months_and_crosses_the_year():
     assert [p.receipts for p in series] == [0, 1, 0, 1]
 
 
+def test_summarize_month_follows_a_payday_cycle():
+    receipts = [
+        receipt(1, date(2026, 9, 22), "Plus", 500, item(500, ZUIVEL)),  # the day before payday: previous cycle
+        receipt(2, date(2026, 9, 23), "Plus", 700, item(700, ZUIVEL)),  # payday itself: this cycle
+        receipt(3, date(2026, 10, 22), "Plus", 900, item(900, ZUIVEL)),  # the last day of this cycle
+        receipt(4, date(2026, 10, 23), "Plus", 100, item(100, ZUIVEL)),  # next cycle
+    ]
+    s = summarize_month(receipts, CATS, SEP, start_day=23)
+    assert s.month == date(2026, 9, 23) and s.total_cents == 700 + 900
+
+
+def test_month_series_follows_a_payday_cycle():
+    receipts = [receipt(1, date(2026, 9, 23), "Plus", 700, item(700, ZUIVEL))]
+    series = month_series(receipts, CATS, SEP, months=2, start_day=23)
+    assert [p.month for p in series] == [date(2026, 8, 23), date(2026, 9, 23)]
+    assert [p.food_cents for p in series] == [0, 700]
+
+
 def point(month, food, receipts=1):
     return MonthPoint(date(2026, month, 1), food, food, receipts)
 
@@ -204,6 +257,13 @@ def test_projection_extrapolates_the_running_month_only():
     assert project_month_end(20000, SEP, date(2026, 9, 6)) is None  # too early to say
     assert project_month_end(20000, date(2026, 8, 1), date(2026, 9, 15)) is None  # a past month
     assert project_month_end(20000, date(2026, 10, 1), date(2026, 9, 15)) is None  # a future month
+
+
+def test_projection_follows_a_payday_cycle_instead_of_the_calendar_month():
+    # cycle: 23 Sep - 22 Oct (30 days). 8 days in (30 Sep), elapsed=8, spent 16000 -> pace 60000.
+    assert project_month_end(16000, SEP, date(2026, 9, 30), start_day=23) == 60000
+    assert project_month_end(16000, SEP, date(2026, 9, 20), start_day=23) is None  # before this cycle starts
+    assert project_month_end(16000, SEP, date(2026, 9, 27), start_day=23) is None  # only 5 days in: too early
 
 
 # --- regulars ---------------------------------------------------------------
@@ -266,3 +326,8 @@ def test_period_start():
     assert period_start("12m", today) == date(2025, 9, 20)
     assert period_start("all", today) is None
     assert period_start("nonsense", today) is None
+
+
+def test_period_start_month_follows_the_payday_cycle():
+    assert period_start("month", date(2026, 9, 20), start_day=23) == date(2026, 8, 23)  # payday not reached yet
+    assert period_start("month", date(2026, 9, 23), start_day=23) == date(2026, 9, 23)

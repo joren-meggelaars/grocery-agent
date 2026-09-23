@@ -16,6 +16,7 @@ from grocery.db.models import CupboardItem, CupboardScan, Product
 from grocery.prices.observations import comparable
 from grocery.receipts.service import ConfirmError
 from grocery.security.deps import Principal, current_principal, get_db
+from grocery.settings_store import effective
 from grocery.web.templating import templates
 
 log = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ def cupboard_list(
     request: Request, error: str | None = None,
     principal: Principal = Depends(current_principal), db: Session = Depends(get_db),
 ):
-    today = local_date(utcnow(), request.app.state.settings.timezone)
+    today = local_date(utcnow(), effective(db, request.app.state.settings).timezone)
     return templates.TemplateResponse(
         request, "cupboard/list.html",
         _ctx(principal, rows=service.cupboard_rows(db, today), waiting=len(service.pending_scans(db)),

@@ -25,6 +25,7 @@ from grocery.prices.observations import shelf_comparable
 from grocery.products.pack import pack_questions
 from grocery.receipts.service import ConfirmError
 from grocery.security.deps import Principal, current_principal, get_db
+from grocery.settings_store import effective
 from grocery.uploads.images import UploadError
 from grocery.uploads.storage import read_image
 from grocery.web.templating import templates
@@ -97,6 +98,7 @@ def queue_page(
     request: Request, principal: Principal = Depends(current_principal), db: Session = Depends(get_db)
 ):
     captures = db.scalars(select(ShelfCapture).order_by(ShelfCapture.id.desc()).limit(60)).all()
+    templates.env.globals["app_timezone"] = effective(db, request.app.state.settings).timezone
     return templates.TemplateResponse(
         request, "capture/queue.html",
         {"user": principal.user, "csrf_token": principal.csrf_token, "captures": captures,
@@ -112,7 +114,7 @@ def _feedback(db: Session, request: Request, capture: ShelfCapture):
     basis, value = comp
     return feedback_for(
         db, capture.product_id, capture.store_id, basis, value,
-        local_date(utcnow(), settings.timezone), exclude=("shelf", capture.id),
+        local_date(utcnow(), effective(db, settings).timezone), exclude=("shelf", capture.id),
     )
 
 

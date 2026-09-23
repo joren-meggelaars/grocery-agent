@@ -13,7 +13,7 @@ from grocery.analytics import routes as analytics_routes
 from grocery.capture import routes as capture_routes
 from grocery.cupboard import routes as cupboard_routes
 from grocery.receipts import routes as receipt_routes
-from grocery.web import routes_auth, routes_home, routes_pwa
+from grocery.web import routes_auth, routes_home, routes_pwa, routes_settings
 from grocery.web.templating import STATIC_DIR, templates
 
 
@@ -55,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(capture_routes.api)
     app.include_router(cupboard_routes.pages)
     app.include_router(cupboard_routes.api)
+    app.include_router(routes_settings.router)
     app.include_router(routes_pwa.router)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
     return app

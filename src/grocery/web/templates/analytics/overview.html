@@ -9,6 +9,9 @@
   <h1>{{ month.strftime("%B %Y") }}</h1>
   {% if next_month %}<a class="btn" href="/overview?month={{ next_month }}" aria-label="Next month">&rarr;</a>{% else %}<span class="btn ghost" aria-hidden="true"></span>{% endif %}
 </nav>
+{% if cycle_start.day != 1 %}
+<p class="muted">{{ cycle_start.strftime("%d %b") }} &ndash; {{ cycle_last_day.strftime("%d %b") }}</p>
+{% endif %}
 
 {% if summary.receipts == 0 %}
   <p class="card">No saved receipts in {{ month.strftime("%B %Y") }} yet. <a href="/receipts/new">Add a receipt</a>.</p>

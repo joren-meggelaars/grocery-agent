@@ -26,6 +26,7 @@ from grocery.products.ean import clean_ean
 from grocery.products.matching import MatchIndex
 from grocery.products.off import Fetcher, OffProduct, http_fetch, lookup
 from grocery.receipts.service import ConfirmError, ExtractionRetry, get_or_create_product
+from grocery.settings_store import effective
 from grocery.uploads.images import UploadError, reencode_image, sniff_kind
 from grocery.uploads.storage import read_image, remove_from_disk, retention_deadline, save_image
 
@@ -79,7 +80,7 @@ def create_capture(
     now = now or utcnow()
     if captured_at is None or captured_at > now + timedelta(days=1):
         captured_at = now
-    stored = save_image(db, settings, image, retention_deadline(settings.unconfirmed_retention_days, now))
+    stored = save_image(db, settings, image, retention_deadline(effective(db, settings).unconfirmed_retention_days, now))
     capture = ShelfCapture(
         client_uuid=client_uuid, ean=ean, store_id=store.id, captured_at=captured_at,
         received_at=now, file_id=stored.id, status="extracting", requires_card=False,
@@ -159,7 +160,7 @@ def run_capture(
     if capture is None or capture.status != "extracting":
         return
 
-    budget = budget_state(db, settings, now)
+    budget = budget_state(db, settings, now, cap=effective(db, settings).llm_monthly_budget_eur)
     if budget["exhausted"]:
         _fail(capture, f"Monthly API budget reached (EUR {budget['spent']:.2f} of {budget['cap']:.2f}).")
         db.commit()
@@ -326,9 +327,10 @@ def confirm_capture(
     capture.error = None
     db.flush()
 
-    record_shelf(db, capture, local_date(capture.captured_at, settings.timezone))
+    eff = effective(db, settings)
+    record_shelf(db, capture, local_date(capture.captured_at, eff.timezone))
     if capture.file is not None and capture.file.deleted_at is None:
-        capture.file.delete_after = now + timedelta(days=settings.confirmed_retention_days)
+        capture.file.delete_after = now + timedelta(days=eff.confirmed_retention_days)
     db.commit()
 
 

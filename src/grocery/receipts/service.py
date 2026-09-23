@@ -32,6 +32,7 @@ from grocery.products.matching import Match, MatchIndex
 from grocery.products.normalize import normalize_raw, product_key
 from grocery.receipts.validation import LineData, ValidationResult, expected_line_total, validate_receipt
 from grocery.refdata import FALLBACK_CATEGORY, QUICKADD_CATEGORY, QUICKADD_NAME
+from grocery.settings_store import effective
 from grocery.uploads.images import UploadError, reencode_image, sniff_kind
 from grocery.uploads.pdf import rasterize_pdf
 from grocery.uploads.storage import (
@@ -92,7 +93,7 @@ def create_from_upload(
     receipt = Receipt(status="extracting", source=source, source_text=source_text, flags=[])
     db.add(receipt)
     db.flush()
-    deadline = retention_deadline(settings.unconfirmed_retention_days, now)
+    deadline = retention_deadline(effective(db, settings).unconfirmed_retention_days, now)
     duplicate = False
     for page_no, image in enumerate(images, start=1):
         duplicate = duplicate or is_duplicate_hash(db, image.sha256)
@@ -164,7 +165,7 @@ def run_extraction(
     if receipt is None or receipt.status != "extracting":
         return
 
-    budget = budget_state(db, settings, now)
+    budget = budget_state(db, settings, now, cap=effective(db, settings).llm_monthly_budget_eur)
     if budget["exhausted"]:
         _fail(
             receipt,
@@ -430,7 +431,7 @@ def confirm_receipt(
     db.flush()
     refresh_flags(db, receipt)
     record_receipt(db, receipt)
-    schedule_deletion(db, receipt.id, now + timedelta(days=settings.confirmed_retention_days))
+    schedule_deletion(db, receipt.id, now + timedelta(days=effective(db, settings).confirmed_retention_days))
     db.commit()
     return result
 

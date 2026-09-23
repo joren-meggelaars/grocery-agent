@@ -22,6 +22,7 @@ from grocery.receipts.service import (
 from grocery.receipts.validation import FLAG_MESSAGES, LineData, validate_receipt
 from grocery.refdata import QUICKADD_CATEGORY, TURKISH_PRICE_KEY
 from grocery.security.deps import Principal, current_principal, get_db
+from grocery.settings_store import effective
 from grocery.uploads.images import UploadError
 from grocery.uploads.storage import read_image
 from grocery.web.templating import templates
@@ -63,7 +64,8 @@ def receipt_list(
     ).all()
     return _page(
         request, "receipts/list.html", principal, receipts=receipts, labels=STATUS_LABEL,
-        budget=budget_state(db, request.app.state.settings), fmt=format_cents,
+        budget=budget_state(db, request.app.state.settings, cap=effective(db, request.app.state.settings).llm_monthly_budget_eur),
+        fmt=format_cents,
     )
 
 
