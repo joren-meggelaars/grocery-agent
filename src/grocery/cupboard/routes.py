@@ -44,7 +44,7 @@ async def scan(request: Request, ean: str = Form(""), db: Session = Depends(get_
         outcome = await run_in_threadpool(service.scan, db, ean)
     except service.InvalidBarcode as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
-    return {"result": outcome.kind, "name": outcome.name}
+    return {"result": outcome.kind, "name": outcome.name, "scan_id": outcome.scan_id}
 
 
 # --- pages -------------------------------------------------------------------
@@ -85,36 +85,57 @@ def scan_page(
 
 @pages.get("/name", response_class=HTMLResponse)
 def name_page(
-    request: Request, error: str | None = None,
+    request: Request, error: str | None = None, scan: int | None = None,
     principal: Principal = Depends(current_principal), db: Session = Depends(get_db),
 ):
+    """All barcodes waiting for a name, or with ?scan=<id> just that one (straight after scanning it)."""
     pending = []
     for p in service.pending_scans(db):
         name, category_id = service.suggestion(db, p)
         pending.append({"scan": p, "name": name, "category_id": category_id})
+    single = None
+    if scan is not None:
+        single = next((p for p in pending if p["scan"].id == scan), None)
     return templates.TemplateResponse(
         request, "cupboard/name.html",
-        _ctx(principal, pending=pending, categories=service.categories(db), product_names=_product_names(db),
+        _ctx(principal, pending=[single] if single else pending, single=single,
+             others=len(pending) - 1 if single else 0,
+             categories=service.categories(db), product_names=_product_names(db),
              error=error if error in KNOWN_ERRORS else None),
     )
+
+
+@pages.get("/name/{scan_id}/status")
+def name_status(scan_id: int, db: Session = Depends(get_db)):
+    pending = db.get(CupboardScan, scan_id)
+    return JSONResponse({"status": pending.status if pending else "gone"})
+
+
+def _after_naming(scan_id: int, next_page: str, error: str | None = None) -> RedirectResponse:
+    """Straight after a scan you come back from the single-name page to the scanner; else to the full list."""
+    if next_page == "scan":
+        if error:
+            return RedirectResponse(f"/cupboard/name?scan={scan_id}&error={quote(error)}", status_code=303)
+        return RedirectResponse("/cupboard/scan", status_code=303)
+    return RedirectResponse(f"/cupboard/name?error={quote(error)}" if error else "/cupboard/name", status_code=303)
 
 
 @pages.post("/name/{scan_id}")
 def name_one(
     scan_id: int, product: str = Form(""), category: str = Form(""), heavy: str = Form(""),
-    db: Session = Depends(get_db),
+    next: str = Form(""), db: Session = Depends(get_db),
 ):
     try:
         service.name_scan(db, scan_id, product, int(category) if category.isdigit() else None, bool(heavy))
     except ConfirmError as exc:
-        return RedirectResponse(f"/cupboard/name?error={quote(exc.messages[0])}", status_code=303)
-    return RedirectResponse("/cupboard/name", status_code=303)
+        return _after_naming(scan_id, next, exc.messages[0])
+    return _after_naming(scan_id, next)
 
 
 @pages.post("/name/{scan_id}/discard")
-def discard(scan_id: int, db: Session = Depends(get_db)):
+def discard(scan_id: int, next: str = Form(""), db: Session = Depends(get_db)):
     service.discard_scan(db, scan_id)
-    return RedirectResponse("/cupboard/name", status_code=303)
+    return _after_naming(scan_id, next)
 
 
 def _item(db: Session, item_id: int) -> CupboardItem:

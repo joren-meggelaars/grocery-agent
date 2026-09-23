@@ -3,17 +3,17 @@
 {% block content %}
 <p class="crumbs"><a href="/cupboard">&larr; Products at home</a> <a href="/cupboard/name">Name scanned</a></p>
 <h1>Scan at home</h1>
-<p class="muted">Hold one product's barcode in front of the camera at a time. The camera stays on; each barcode is
-  reported once. Unknown barcodes are looked up and named afterwards.</p>
+<p class="muted">Hold one product's barcode in front of the camera. It stops by itself as soon as a barcode is read: a
+  known product is added to your list, a new one goes straight to naming.</p>
 
 <div id="cb-toast" class="toast" role="status" aria-live="polite" hidden></div>
 
 <section class="stack">
+  <button type="button" class="btn big primary" id="cb-start">Start camera</button>
+  <button type="button" class="btn big" id="cb-stop" hidden>Stop camera</button>
   <div id="cb-scanner" class="scanner" hidden>
     <video id="cb-video" playsinline muted></video>
   </div>
-  <button type="button" class="btn big primary" id="cb-start">Start camera</button>
-  <button type="button" class="btn big" id="cb-stop" hidden>Stop camera</button>
 
   <label for="cb-ean">Or type a number</label>
   <div class="grid2">

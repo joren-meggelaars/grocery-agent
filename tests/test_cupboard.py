@@ -314,7 +314,7 @@ def test_scan_api_results(session, db):
     client, token = session
     p = product(db)
     link(db, p)
-    assert api_scan(client, token, EAN).json() == {"result": "added", "name": "Halfvolle melk 1L"}
+    assert api_scan(client, token, EAN).json() == {"result": "added", "name": "Halfvolle melk 1L", "scan_id": None}
     assert api_scan(client, token, EAN).json()["result"] == "already"
     unknown = api_scan(client, token, EAN2).json()
     assert unknown["result"] == "unknown" and unknown["name"] is None
@@ -468,3 +468,91 @@ def test_the_product_name_fields_switch_off_ios_suggestions(session, db):
         field = page.split('name="product"', 1)[1].split(">", 1)[0]
         for attr in ('autocomplete="off"', 'autocorrect="off"', 'autocapitalize="off"', 'spellcheck="false"'):
             assert attr in field, (path, attr)
+
+
+# --- one barcode at a time: the camera stops and you go straight to naming --------------------
+
+def _static(name):
+    from pathlib import Path
+
+    return (Path(__file__).resolve().parent.parent / "src/grocery/web/static" / name).read_text(encoding="utf-8")
+
+
+def test_the_scan_api_returns_the_id_of_a_new_barcode(session, db):
+    client, token = session
+    body = api_scan(client, token, EAN).json()
+    assert body["result"] == "unknown" and body["scan_id"] == db.scalar(select(CupboardScan)).id
+    assert api_scan(client, token, EAN).json()["result"] == "unknown_again"
+
+
+def test_a_known_barcode_has_no_scan_id(session, db):
+    client, token = session
+    p = product(db)
+    link(db, p)
+    body = api_scan(client, token, EAN).json()
+    assert body["result"] == "added" and body["scan_id"] is None
+
+
+def test_the_camera_stops_at_the_first_barcode_and_the_stop_button_is_above_the_video(session):
+    client, _ = session
+    page = client.get("/cupboard/scan").text
+    assert page.index('id="cb-stop"') < page.index('id="cb-scanner"')  # no scrolling past the video to reach it
+    js = _static("js/cupboard_scan.js")
+    assert "continuous" not in js  # single scan mode: the scanner stops itself after the first code
+    assert "stopCamera();" in js and '"/cupboard/name?scan="' in js
+    assert "max-height: 38vh" in _static("css/app.css")
+
+
+def test_naming_straight_after_a_scan_shows_only_that_barcode(session, db):
+    client, token = session
+    api_scan(client, token, EAN)
+    api_scan(client, token, EAN2)
+    first = db.scalars(select(CupboardScan).order_by(CupboardScan.id)).first()
+    page = client.get(f"/cupboard/name?scan={first.id}").text
+    assert "Name this product" in page and f"Barcode {EAN}" in page and f"Barcode {EAN2}" not in page
+    assert 'name="next" value="scan"' in page and "1 more is waiting" in page
+
+
+def test_an_unknown_scan_id_falls_back_to_the_full_list(session, db):
+    client, token = session
+    api_scan(client, token, EAN)
+    page = client.get("/cupboard/name?scan=9999").text
+    assert "Name scanned products" in page and f"Barcode {EAN}" in page
+
+
+def test_saving_the_single_name_returns_to_the_scanner(session, db):
+    client, token = session
+    api_scan(client, token, EAN)
+    scan_id = db.scalar(select(CupboardScan)).id
+    resp = client.post(f"/cupboard/name/{scan_id}", data={"csrf_token": token, "product": "Pindakaas", "next": "scan"})
+    assert resp.status_code == 303 and resp.headers["location"] == "/cupboard/scan"
+    assert db.scalar(select(Product).where(Product.name_key == product_key("Pindakaas"))) is not None
+
+
+def test_a_missing_name_in_single_mode_stays_on_that_barcode(session, db):
+    client, token = session
+    api_scan(client, token, EAN)
+    scan_id = db.scalar(select(CupboardScan)).id
+    resp = client.post(f"/cupboard/name/{scan_id}", data={"csrf_token": token, "product": "", "next": "scan"})
+    assert resp.status_code == 303 and resp.headers["location"].startswith(f"/cupboard/name?scan={scan_id}&error=")
+    assert "Enter the product name." in client.get(resp.headers["location"]).text
+
+
+def test_skipping_in_single_mode_returns_to_the_scanner_and_the_list_flow_is_unchanged(session, db):
+    client, token = session
+    api_scan(client, token, EAN)
+    scan_id = db.scalar(select(CupboardScan)).id
+    assert client.post(f"/cupboard/name/{scan_id}/discard", data={"csrf_token": token, "next": "scan"}).headers["location"] == "/cupboard/scan"
+    api_scan(client, token, EAN2)
+    other = db.scalar(select(CupboardScan).where(CupboardScan.ean == EAN2)).id
+    assert client.post(f"/cupboard/name/{other}/discard", data={"csrf_token": token}).headers["location"] == "/cupboard/name"
+
+
+def test_the_lookup_status_endpoint(session, db):
+    client, token = session
+    api_scan(client, token, EAN)
+    scan_id = db.scalar(select(CupboardScan)).id
+    assert client.get(f"/cupboard/name/{scan_id}/status").json() == {"status": "lookup"}
+    run_jobs((client.app.state.settings, db))
+    assert client.get(f"/cupboard/name/{scan_id}/status").json() == {"status": "needs_name"}
+    assert client.get("/cupboard/name/9999/status").json() == {"status": "gone"}
