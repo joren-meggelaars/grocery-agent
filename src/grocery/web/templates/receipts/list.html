@@ -6,7 +6,7 @@
 {% include "receipts/_budget.html" %}
 <nav class="stack">
   <a class="btn primary" href="/receipts/new">Add receipt (photo or PDF)</a>
-  <a class="btn" href="/receipts/quick?store=bakery">Add bakery purchase</a>
+  <a class="btn" href="/receipts/quick?store=bakery">Quick add (no photo)</a>
   <a class="btn" href="/receipts/quick?store=turkish">Add Turkish supermarket purchase</a>
 </nav>
 <ul class="list spaced">
@@ -15,7 +15,7 @@
     <a class="card row-link" href="/receipts/{{ r.id }}">
       <span>
         <strong>{{ r.store.name if r.store else "Unknown store" }}</strong>
-        <span class="muted">{{ r.purchased_on.isoformat() if r.purchased_on else "no date" }}</span>
+        <span class="muted row-date">{{ r.purchased_on.isoformat() if r.purchased_on else "no date" }}</span>
       </span>
       <span>
         {% if r.total_cents is not none %}EUR {{ fmt(r.total_cents) }}{% endif %}

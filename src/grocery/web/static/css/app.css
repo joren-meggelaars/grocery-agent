@@ -217,6 +217,10 @@ details > summary { cursor: pointer; padding: 0.7rem 0; font-weight: 600; }
 .receipt-img { display: block; width: 100%; height: auto; margin-top: 10px; border-radius: 10px; border: 1px solid var(--border); }
 .row-link { display: flex; justify-content: space-between; gap: 10px; text-decoration: none; color: var(--text); }
 .row-link:hover { text-decoration: none; border-color: var(--accent-line); }
+/* the name on top, date/store always on their own line below: every row is then the same
+   height regardless of how long the name or store is */
+.row-link strong { display: block; }
+.row-date { display: block; font-size: 0.85rem; }
 
 /* --- home: hero + tiles ---------------------------------------------------------------------- */
 

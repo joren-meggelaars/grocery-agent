@@ -75,7 +75,7 @@ def test_shared_pages_show_no_user_specific_text(session):
 def test_the_home_dashboard_leads_with_food_spend_against_the_reference(session):
     html = session.get("/").text
     assert "hero-card" in html and "Food spend in" in html and "€400.00 reference" in html
-    for tile in ("Scan in store", "Add receipt", "Products at home", "What I buy most", "Bakery", "Turkish supermarket"):
+    for tile in ("Scan in store", "Add receipt", "Products at home", "What I buy most", "Quick add", "Turkish supermarket"):
         assert tile in html
     assert 'class="tile primary" href="/capture"' in html
 
