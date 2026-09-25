@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session
 
 from grocery.config import Settings
 from grocery.db.base import utcnow
-from grocery.db.models import CupboardItem, Deal, DealRun, Job, PriceObservation, Product, Receipt, ReceiptLine, Store
+from grocery.db.models import CupboardItem, Deal, DealRule, DealRun, Job, PriceObservation, Product, Receipt, ReceiptLine, Store
 from grocery.deals.client import PrijsProfeet, SourceError
 from grocery.jobs import queue
 from grocery.prices.observations import comparable
@@ -147,6 +147,7 @@ def upsert(db: Session, offer, now: datetime) -> Deal:
         deal = Deal(source=SOURCE, external_id=offer.external_id, size_unverified=False)
         db.add(deal)
     deal.retailer, deal.name, deal.brand, deal.ean, deal.category = offer.retailer, offer.name, offer.brand, offer.ean, offer.category
+    deal.private_label = offer.private_label
     deal.price_cents, deal.original_price_cents = offer.price_cents, offer.original_price_cents
     deal.savings_pct, deal.savings_cents = offer.savings_pct, offer.savings_cents
     deal.promo_type, deal.promo_text = offer.promo_type, offer.promo_text
@@ -247,8 +248,77 @@ def compare(deal: Deal, product: Product, usual: tuple[str, int]) -> tuple[int, 
     return cents, (deal.price_cents - cents) / cents, True  # pack against pack, sizes not known to be equal
 
 
+# --- what you told the radar ------------------------------------------------------------
+
+REASONS = {
+    "brand": "Not my brand",
+    "category": "No interest in this category",
+    "a_brand": "I do not want A-brands in this category",
+    "product": "Not this product",
+    "other": "Something else (only this offer)",
+}
+_KIND = {"brand": "brand", "category": "category", "a_brand": "a_brand", "product": "product", "other": "deal"}
+
+
+def available_reasons(deal: Deal) -> list[str]:
+    """The reasons that make sense for this offer: a brand rule needs a brand, an A-brand rule an A-brand."""
+    out = []
+    if deal.brand:
+        out.append("brand")
+    if deal.category:
+        out.append("category")
+        if deal.private_label is False:
+            out.append("a_brand")
+    return out + ["product", "other"]
+
+
+def _rule_value(reason: str, deal: Deal) -> str:
+    if reason == "brand":
+        return (deal.brand or "").casefold()
+    if reason in ("category", "a_brand"):
+        return deal.category or ""
+    if reason == "product":
+        return normalize_raw(deal.name)
+    return deal.external_id
+
+
+def dismiss(db: Session, deal: Deal, reason: str, note: str, now: datetime) -> DealRule:
+    """Say an offer is not interesting; the reason decides how far that reaches. Raises ValueError for a reason
+    that does not fit this offer."""
+    if reason not in available_reasons(deal):
+        raise ValueError("That reason does not fit this offer.")
+    kind, value = _KIND[reason], _rule_value(reason, deal)
+    note = " ".join(note.split())[:300] or None
+    rule = db.scalar(select(DealRule).where(DealRule.kind == kind, DealRule.value == value))
+    if rule is None:
+        rule = DealRule(kind=kind, value=value, label=deal.name[:300], created_at=now)
+        db.add(rule)
+    if note:
+        rule.note = note
+    db.commit()
+    return rule
+
+
+def load_rules(db: Session) -> dict[str, set[str]]:
+    rules: dict[str, set[str]] = {k: set() for k in ("brand", "category", "a_brand", "product", "deal")}
+    for rule in db.scalars(select(DealRule)):
+        rules.setdefault(rule.kind, set()).add(rule.value)
+    return rules
+
+
+def blocked(rules: dict[str, set[str]], deal: Deal) -> bool:
+    return bool(
+        (deal.brand and deal.brand.casefold() in rules["brand"])
+        or (deal.category and deal.category in rules["category"])
+        or (deal.category in rules["a_brand"] and deal.private_label is False)
+        or normalize_raw(deal.name) in rules["product"]
+        or deal.external_id in rules["deal"]
+    )
+
+
 def evaluate(db: Session, eff: Effective, today: date) -> dict[str, int]:
     watched = {c for c in eff.deals_categories.split(",") if c}
+    rules = load_rules(db)
     tracked = {t.product.id: t for t in tracked_products(db, today)}
     counts = {"mine": 0, "notable": 0}
     for deal in db.scalars(select(Deal).where((Deal.valid_until.is_(None)) | (Deal.valid_until >= today))):
@@ -271,6 +341,8 @@ def evaluate(db: Session, eff: Effective, today: date) -> dict[str, int]:
             and (deal.savings_cents or 0) >= round(eff.deals_notable_min_eur * 100)
         ):
             deal.relevance, deal.reason = "notable", f"{round(deal.savings_pct)}% off, saves EUR {(deal.savings_cents or 0) / 100:.2f}"
+        if deal.relevance and blocked(rules, deal):
+            deal.relevance = deal.reason = None
         if deal.relevance:
             counts[deal.relevance] += 1
     db.commit()

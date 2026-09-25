@@ -223,3 +223,8 @@ where SQL can decide, per-task model setting. To be measured from the logged tok
   alerted once (`alerted_at`); a failed send is retried on the next refresh. `.env`: `HA_URL`, `HA_TOKEN`, `HA_NOTIFY_SERVICE`.
 - **Not done**: product images (privacy/CSP), vision on folder PDFs (only if this source turns out too thin), cross-retailer EAN
   matching (a paid PrijsProfeet tier), iOS web push (Home Assistant was chosen instead).
+- **"Not interesting" (added later)**: each offer has a form with reasons that fit it: not my brand, no interest in the category,
+  no A-brands in the category (only offered for A-brands; house-brand and unknown offers are kept), not this product (matched on
+  the normalised name, so any shop and spelling), or something else (this offer only, with your own words). Every reason can carry a
+  note. They are stored as `deal_rules` and applied in every evaluation, so they survive the nightly refresh and never alert;
+  the page lists them with a Remove button. Needs `deals.private_label` (migration 0008).

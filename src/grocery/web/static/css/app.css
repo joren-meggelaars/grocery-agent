@@ -344,3 +344,7 @@ details > summary { cursor: pointer; padding: 0.7rem 0; font-weight: 600; }
          box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.14); }
 .toast.good { background: #0f5f2c; border-color: #4ade80; }
 .toast.bad { background: #8a1c1c; border-color: #fca5a5; }
+
+.deal .dismiss { margin-top: 0.4rem; }
+.deal .dismiss summary { color: var(--muted); font-weight: 500; font-size: 0.9rem; padding: 0.4rem 0; }
+.deal .dismiss .stack { padding: 0.5rem 0 0.25rem; }

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Deals - Grocery Agent{% endblock %}
-{% macro deal_card(d, stores) %}
+{% macro deal_card(d, stores, reasons, reasons_for, csrf_token) %}
 <li class="card deal">
   <div class="regular-head">
     <strong>{{ d.name }}</strong>
@@ -17,6 +17,20 @@
   {% if d.loyalty_price_cents %}<p class="muted">EUR {{ "%.2f"|format(d.loyalty_price_cents / 100) }} with {{ d.loyalty_program }}.</p>{% endif %}
   {% if d.in_store_only %}<p class="muted">In the shop only.</p>{% endif %}
   {% if d.product_url %}<p><a href="{{ d.product_url }}" rel="noopener noreferrer" target="_blank">Open at {{ stores.get(d.retailer, d.retailer) }}</a></p>{% endif %}
+  <details class="dismiss">
+    <summary>Not interesting</summary>
+    <form method="post" action="/deals/{{ d.id }}/dismiss" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {% for key in reasons_for(d) %}
+      <label class="check"><input type="radio" name="reason" value="{{ key }}" {{ "checked" if key == "other" }}>
+        {{ reasons[key] }}{% if key == "brand" %}: {{ d.brand }}{% elif key in ("category", "a_brand") %}: {{ d.category }}{% endif %}</label>
+      {% endfor %}
+      <label>Anything to add? (optional)
+        <input type="text" name="note" maxlength="300" autocomplete="off" autocorrect="off" spellcheck="false">
+      </label>
+      <button type="submit" class="btn">Hide this offer</button>
+    </form>
+  </details>
 </li>
 {% endmacro %}
 {% block content %}
@@ -29,12 +43,31 @@
 {% if eff.deals_alerts == "on" and not ha_ready %}<p class="card">Alerts need Home Assistant: set HA_URL, HA_TOKEN and HA_NOTIFY_SERVICE in .env on the server.</p>{% endif %}
 
 <h2>For you</h2>
-{% if mine %}<ul class="list">{% for d in mine %}{{ deal_card(d, stores) }}{% endfor %}</ul>
+{% if mine %}<ul class="list">{% for d in mine %}{{ deal_card(d, stores, reasons, reasons_for, csrf_token) }}{% endfor %}</ul>
 {% else %}<p class="card">Nothing this week is clearly cheaper than what you usually pay.</p>{% endif %}
 
 <h2>Worth a look</h2>
-{% if notable %}<ul class="list">{% for d in notable %}{{ deal_card(d, stores) }}{% endfor %}</ul>
+{% if notable %}<ul class="list">{% for d in notable %}{{ deal_card(d, stores, reasons, reasons_for, csrf_token) }}{% endfor %}</ul>
 {% else %}<p class="card">No big discounts in the categories you watch ({{ eff.deals_categories.replace(",", ", ") or "none" }}).</p>{% endif %}
+
+{% if rules %}
+<h2>What you told the radar</h2>
+<ul class="list">
+  {% for r in rules %}
+  <li class="card rule">
+    <div class="regular-head">
+      <span><strong>{{ rule_titles[r.kind] }}</strong>
+        {% if r.kind in ("brand", "category", "a_brand", "product") %}: {{ r.value }}{% endif %}</span>
+      <form method="post" action="/deals/rules/{{ r.id }}/remove">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="btn">Remove</button>
+      </form>
+    </div>
+    <p class="muted">From: {{ r.label }}{% if r.note %} &middot; &ldquo;{{ r.note }}&rdquo;{% endif %}</p>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
 
 <p class="muted spaced">
   {% if last %}Last refresh: {{ (last.finished_at or last.started_at)|localtime("%d %b %H:%M") }}

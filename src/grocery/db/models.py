@@ -394,6 +394,7 @@ class Deal(Base):
     brand: Mapped[str | None] = mapped_column(String(100))
     ean: Mapped[str | None] = mapped_column(String(14))
     category: Mapped[str | None] = mapped_column(String(40))
+    private_label: Mapped[bool | None] = mapped_column(Boolean)  # the shop's own brand (huismerk); None: not known
     price_cents: Mapped[int] = mapped_column(Integer)  # what one item costs in the offer
     original_price_cents: Mapped[int | None] = mapped_column(Integer)
     savings_pct: Mapped[float | None] = mapped_column(Float)
@@ -423,3 +424,17 @@ class Deal(Base):
     alerted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     product: Mapped[Product | None] = relationship()
+
+
+class DealRule(Base):
+    """Something you told the radar: this kind of offer is not interesting. Applied to every refresh."""
+
+    __tablename__ = "deal_rules"
+    __table_args__ = (UniqueConstraint("kind", "value", name="uq_deal_rules_kind_value"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(12))  # brand | category | a_brand | product | deal
+    value: Mapped[str] = mapped_column(String(200))  # brand (case-folded), category slug, normalised name, offer id
+    label: Mapped[str] = mapped_column(String(300))  # the offer it was said about, to show in the list
+    note: Mapped[str | None] = mapped_column(String(300))  # your own words
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

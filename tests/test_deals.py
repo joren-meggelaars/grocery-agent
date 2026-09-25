@@ -618,3 +618,185 @@ def test_refresh_now_needs_the_csrf_token(client):
 def test_the_menu_and_home_page_link_to_the_deals(client):
     login(client)
     assert 'href="/deals"' in client.get("/").text
+
+
+# --- "not interesting": rules that outlive a refresh ------------------------------------------
+
+def big(db, pid, **kw):
+    """An offer that is worth a look by itself (50% off, EUR 6 saved, a watched category)."""
+    fields = dict(product_id=pid, name=f"Waspoeder {pid}", brand="Robijn", price=6.00, original_price=12.00, savings_percentage=50.0,
+                  unified_category="huishouden", private_label=False, multi_buy_quantity=None, promotional_keywords=[])
+    deal = service.upsert(db, parse_offer(raw(**{**fields, **kw})), NOW)
+    db.commit()
+    return deal
+
+
+def relevant(db, eff):
+    service.evaluate(db, eff, TODAY)
+    db.expire_all()
+    return {d.external_id for d in db.scalars(select(Deal).where(Deal.relevance.is_not(None)))}
+
+
+def test_only_reasons_that_fit_the_offer_are_offered(env):
+    settings, db = env
+    plain = big(db, "a", brand=None, private_label=None)
+    assert service.available_reasons(plain) == ["category", "product", "other"]
+    a_brand = big(db, "b")
+    assert service.available_reasons(a_brand) == ["brand", "category", "a_brand", "product", "other"]
+    house = big(db, "c", private_label=True)
+    assert "a_brand" not in service.available_reasons(house)
+    nothing = big(db, "d", brand=None, unified_category=None, private_label=None)
+    assert service.available_reasons(nothing) == ["product", "other"]
+
+
+def test_not_my_brand_hides_every_offer_of_that_brand(env):
+    settings, db = env
+    a, b = big(db, "a"), big(db, "b")
+    big(db, "c", brand="Ariel")
+    assert relevant(db, eff_of(env)) == {"a", "b", "c"}
+    service.dismiss(db, a, "brand", "", NOW)
+    assert relevant(db, eff_of(env)) == {"c"}
+
+
+def test_no_interest_in_a_category_hides_all_of_it_and_only_it(env):
+    settings, db = env
+    a = big(db, "a")
+    big(db, "b", unified_category="drogisterij", name="Tandpasta", brand="Colgate")
+    service.dismiss(db, a, "category", "", NOW)
+    assert relevant(db, eff_of(env)) == {"b"}
+
+
+def test_no_a_brands_only_hides_a_brands_in_that_category(env):
+    settings, db = env
+    a = big(db, "a")                                       # A-brand household
+    big(db, "b", brand="Huismerk", private_label=True)     # house brand household
+    big(db, "c", brand="Onbekend", private_label=None)     # unknown (Lidl carries no signal)
+    big(db, "d", unified_category="drogisterij", name="Shampoo", brand="Andrelon")  # A-brand elsewhere
+    service.dismiss(db, a, "a_brand", "", NOW)
+    assert relevant(db, eff_of(env)) == {"b", "c", "d"}
+
+
+def test_not_this_product_hides_it_at_every_shop(env):
+    settings, db = env
+    a = big(db, "a", name="Robijn Wasmiddel Color")
+    big(db, "b", name="ROBIJN  wasmiddel color", retailer="plus")  # same product, another shop and spelling
+    big(db, "c", name="Robijn Wasmiddel Wit")
+    service.dismiss(db, a, "product", "", NOW)
+    assert relevant(db, eff_of(env)) == {"c"}
+
+
+def test_something_else_hides_only_that_offer_and_keeps_the_note(env):
+    settings, db = env
+    a = big(db, "a")
+    big(db, "b")
+    rule = service.dismiss(db, a, "other", "  too   far to drive  ", NOW)
+    assert rule.note == "too far to drive" and rule.kind == "deal" and rule.value == "a"
+    assert relevant(db, eff_of(env)) == {"b"}
+
+
+def test_a_reason_that_does_not_fit_is_refused_and_stores_nothing(env):
+    settings, db = env
+    from grocery.db.models import DealRule
+
+    plain = big(db, "a", brand=None, private_label=None)
+    for reason in ("brand", "a_brand", "nonsense"):
+        with pytest.raises(ValueError):
+            service.dismiss(db, plain, reason, "", NOW)
+    assert db.scalar(select(DealRule)) is None
+
+
+def test_saying_the_same_thing_twice_keeps_one_rule_and_updates_the_note(env):
+    settings, db = env
+    from grocery.db.models import DealRule
+
+    a = big(db, "a")
+    service.dismiss(db, a, "brand", "first", NOW)
+    service.dismiss(db, a, "brand", "second", NOW)
+    rules = db.scalars(select(DealRule)).all()
+    assert len(rules) == 1 and rules[0].note == "second" and rules[0].value == "robijn"
+
+
+def test_a_rule_still_applies_after_the_next_refresh_and_no_alert_is_sent_for_it(ha_env):
+    client, db = ha_env
+    settings = client.app.state.settings
+    a = big(db, "a")
+    service.dismiss(db, a, "brand", "", NOW)
+    source = FakeSource({("huishouden", "jumbo"): [raw(product_id="a", name="Waspoeder a", brand="Robijn", price=6.00, original_price=12.00,
+                                                       savings_percentage=50.0, private_label=False, multi_buy_quantity=None,
+                                                       promotional_keywords=[])]})
+    sent = []
+    service.ensure_refresh_queued(db, effective(db, settings), NOW)
+    run_jobs((settings, db), source, sent)
+    assert db.scalar(select(Deal).where(Deal.external_id == "a")).relevance is None
+    assert sent == []
+
+
+def test_a_house_brand_flag_is_read_from_the_source():
+    assert parse_offer(raw(private_label=True)).private_label is True
+    assert parse_offer(raw(private_label=False)).private_label is False
+    assert parse_offer(raw(private_label=None)).private_label is None
+    assert parse_offer(raw(private_label="yes")).private_label is None
+
+
+def dismiss_page(client, db):
+    """Two offers that are current today, so the page lists them."""
+    login(client)
+    today = date.today()
+    for pid, name, brand in (("a", "Robijn wasmiddel", "Robijn"), ("b", "Ariel capsules", "Ariel")):
+        big(db, pid, name=name, brand=brand, valid_from=(today - timedelta(days=1)).isoformat(),
+            valid_until=(today + timedelta(days=5)).isoformat())
+    service.evaluate(db, effective(db, client.app.state.settings), today)
+    return {d.external_id: d.id for d in db.scalars(select(Deal))}
+
+
+def test_every_offer_has_a_not_interesting_form_with_the_fitting_reasons(client, db):
+    ids = dismiss_page(client, db)
+    page = client.get("/deals").text
+    assert page.count("Not interesting") == 2
+    assert f'action="/deals/{ids["a"]}/dismiss"' in page
+    for text in ("Not my brand: Robijn", "No interest in this category: huishouden", "I do not want A-brands in this category",
+                 "Not this product", "Something else (only this offer)", "Anything to add?"):
+        assert text in page
+
+
+def test_dismissing_an_offer_removes_it_and_lists_the_rule_with_your_words_escaped(client, db):
+    ids = dismiss_page(client, db)
+    resp = client.post(f"/deals/{ids['a']}/dismiss", data={
+        "csrf_token": csrf_of(client), "reason": "brand", "note": "<b>never</b> again"})
+    assert resp.status_code == 303 and resp.headers["location"] == "/deals?msg=dismissed"
+    page = client.get(resp.headers["location"]).text
+    assert "Got it: that offer is gone" in page
+    assert page.count("Robijn wasmiddel") == 1  # only in the rules list ("From: ..."), no longer as an offer
+    assert "What you told the radar" in page and "Not my brand" in page and ": robijn" in page
+    assert "<b>never</b>" not in page and "&lt;b&gt;never&lt;/b&gt; again" in page
+    assert "Ariel capsules" in page  # the other brand stays
+
+
+def test_removing_a_rule_brings_the_offers_back(client, db):
+    from grocery.db.models import DealRule
+
+    ids = dismiss_page(client, db)
+    token = csrf_of(client)
+    client.post(f"/deals/{ids['a']}/dismiss", data={"csrf_token": token, "reason": "category"})
+    assert "Ariel capsules" not in client.get("/deals").text
+    rule = db.scalar(select(DealRule))
+    resp = client.post(f"/deals/rules/{rule.id}/remove", data={"csrf_token": token})
+    assert resp.status_code == 303 and resp.headers["location"] == "/deals?msg=rule_removed"
+    page = client.get(resp.headers["location"]).text
+    assert "Rule removed" in page and "Ariel capsules" in page and "Robijn wasmiddel" in page
+
+
+def test_dismiss_errors_are_friendly(client, db):
+    ids = dismiss_page(client, db)
+    token = csrf_of(client)
+    assert client.post("/deals/99999/dismiss", data={"csrf_token": token, "reason": "other"}).status_code == 404
+    resp = client.post(f"/deals/{ids['a']}/dismiss", data={"csrf_token": token, "reason": "nonsense"})
+    assert resp.headers["location"] == "/deals?msg=bad_reason"
+    assert "does not fit this offer" in client.get("/deals?msg=bad_reason").text
+    assert client.get("/deals?msg=<script>").status_code == 200  # unknown messages are ignored, never echoed
+
+
+def test_dismissing_and_removing_need_the_csrf_token(client, db):
+    ids = dismiss_page(client, db)
+    assert client.post(f"/deals/{ids['a']}/dismiss", data={"reason": "other"}).status_code == 403
+    assert client.post("/deals/rules/1/remove").status_code == 403

@@ -69,6 +69,7 @@ class Offer:
     brand: str | None
     ean: str | None
     category: str | None
+    private_label: bool | None  # the shop's own brand
     price_cents: int  # one item
     original_price_cents: int | None
     savings_pct: float | None
@@ -147,7 +148,9 @@ def parse_offer(raw) -> Offer | None:
     return Offer(
         external_id=external_id, retailer=retailer, name=name, brand=_text(raw.get("brand"), 100),
         ean=ean if isinstance(ean, str) and ean.isascii() and ean.isdigit() and len(ean) <= 14 else None,
-        category=_text(raw.get("unified_category"), 40), price_cents=price_cents, original_price_cents=original,
+        category=_text(raw.get("unified_category"), 40),
+        private_label=raw.get("private_label") if isinstance(raw.get("private_label"), bool) else None,
+        price_cents=price_cents, original_price_cents=original,
         savings_pct=float(savings_pct) if savings_pct is not None else None, savings_cents=savings_cents,
         promo_type=_text(raw.get("promotion_type"), 20), promo_text=promo_text,
         buy_quantity=quantity if quantity and quantity > 1 else None, bundle_price_cents=bundle,
