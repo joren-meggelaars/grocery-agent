@@ -22,7 +22,7 @@ git clone <your-repo-url> ~/grocery-agent
 cd ~/grocery-agent
 
 # 2. Configure (secrets stay in .env, which is git-ignored)
-cp .env.example .env
+cp -n .env.example .env
 chmod 600 .env
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
 
