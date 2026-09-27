@@ -82,8 +82,17 @@
 
   <nav class="tabbar" aria-label="Quick">
     {{ tab_item(here, "home", "/", "home", "Home") }}
-    {{ tab_item(here, "receipts", "/receipts", "receipt", "Receipts") }}
-    {{ tab_item(here, "scan", "/capture", "scan", "Scan", "scan") }}
+    {{ tab_item(here, "shopping", "/shopping-list", "list", "Shopping") }}
+    <div class="tab-pop-wrap">
+      <button type="button" class="tab-item scan{{ ' active' if here in ('scan', 'review', 'receipts', 'add') }}"
+              data-scan-toggle aria-haspopup="true" aria-expanded="false" aria-controls="scan-pop">
+        <span class="icon-wrap"><svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg></span>Scan
+      </button>
+      <div class="tab-pop" id="scan-pop" hidden>
+        <a href="/capture"><svg class="icon" aria-hidden="true"><use href="#i-scan"/></svg>Scan in store</a>
+        <a href="/receipts"><svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg>Receipts</a>
+      </div>
+    </div>
     {{ tab_item(here, "overview", "/overview", "chart", "Overview") }}
     <button type="button" class="tab-item" data-nav-toggle><span class="icon-wrap"><svg class="icon" aria-hidden="true"><use href="#i-menu"/></svg></span>More</button>
   </nav>

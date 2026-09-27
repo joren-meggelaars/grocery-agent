@@ -51,9 +51,18 @@ def test_the_phone_layout_has_an_app_bar_a_tab_bar_and_a_menu_button(session):
     html = session.get("/").text
     assert 'class="appbar"' in html and 'class="tabbar"' in html
     assert html.count("data-nav-toggle") == 2  # app bar button and the "More" tab
-    for label in ("Home", "Receipts", "Scan", "Overview", "More"):
+    for label in ("Home", "Shopping", "Overview", "More"):
         assert f">{label}</button>" in html or f"</span>{label}</a>" in html or f"</span>{label}</button>" in html
-    assert 'class="tab-item scan' in html
+    assert 'class="tab-item scan' in html and ">Scan" in html
+
+
+def test_the_scan_tab_is_a_popup_with_scan_and_receipts_not_a_direct_link(session):
+    html = session.get("/").text
+    assert 'data-scan-toggle' in html and 'aria-controls="scan-pop"' in html
+    assert '<div class="tab-pop" id="scan-pop" hidden>' in html
+    assert 'href="/capture"' in html and 'href="/receipts"' in html
+    js = (STATIC / "js/common.js").read_text(encoding="utf-8")
+    assert "data-scan-toggle" in js and "aria-expanded" in js
 
 
 def test_the_menu_toggle_script_exists():

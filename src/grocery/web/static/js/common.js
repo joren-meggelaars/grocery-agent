@@ -21,3 +21,21 @@ document.querySelectorAll("[data-nav-toggle]").forEach(function (button) {
     if (shell) shell.classList.toggle("nav-open");
   });
 });
+
+// The "Scan" tab button opens a small menu (Scan in store / Receipts) instead of navigating directly.
+document.querySelectorAll("[data-scan-toggle]").forEach(function (button) {
+  var pop = document.getElementById(button.getAttribute("aria-controls"));
+  if (!pop) return;
+  function close() { pop.hidden = true; button.setAttribute("aria-expanded", "false"); }
+  function open() { pop.hidden = false; button.setAttribute("aria-expanded", "true"); }
+  button.addEventListener("click", function (event) {
+    event.stopPropagation();
+    if (pop.hidden) open(); else close();
+  });
+  document.addEventListener("click", function (event) {
+    if (!pop.hidden && event.target !== button && !pop.contains(event.target)) close();
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") close();
+  });
+});
