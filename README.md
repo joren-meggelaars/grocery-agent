@@ -226,6 +226,7 @@ zones and person to use. An example, adjust the zone and entity names to yours:
 ```yaml
 automation:
   - alias: "Grocery list reminder"
+    id: "grocery_list_reminder"
     trigger:
       - platform: zone
         entity_id: person.joren
@@ -239,6 +240,10 @@ automation:
         entity_id: person.joren
         zone: zone.jumbo
         event: enter
+      - platform: zone
+        entity_id: person.joren
+        zone: zone.aldi
+        event: enter
     condition:
       - condition: template
         value_template: "{{ state('sensor.grocery_shopping_list') | int(0) > 0 }}"
@@ -248,6 +253,9 @@ automation:
           title: "Shopping list"
           message: "{{ state_attr('sensor.grocery_shopping_list', 'text') }}"
 ```
+
+`id` is required to paste this straight into a YAML automation (Home Assistant otherwise generates one, but
+pasting the same block twice without an id would create a duplicate automation instead of updating it).
 
 Create the zones under Settings -> Areas, zones & labels -> Zones (drop a pin at each shop, a radius of
 100-150 m is usually enough), and confirm `person.joren` (or whichever) is the entity that tracks your phone.
