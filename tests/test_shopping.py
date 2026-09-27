@@ -470,3 +470,12 @@ def test_a_mutation_via_the_page_queues_a_sync_job(session, db):
     client, token = session
     client.post("/shopping-list/add", data={"csrf_token": token, "product": "Brood"})
     assert db.scalar(select(Job.id).where(Job.kind == service.HA_SYNC_JOB)) is not None
+
+
+def test_the_product_and_note_fields_switch_off_ios_suggestions(session):
+    client, token = session
+    page = client.get("/shopping-list").text
+    for name in ("product", "note"):
+        field = page.split(f'name="{name}"', 1)[1].split(">", 1)[0]
+        for attr in ('autocomplete="off"', 'autocorrect="off"', 'spellcheck="false"', "data-1p-ignore", 'data-lpignore="true"'):
+            assert attr in field, (name, attr)
