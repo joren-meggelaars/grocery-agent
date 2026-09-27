@@ -221,44 +221,47 @@ Needs `HA_URL`/`HA_TOKEN` set (same as the deals alerts, see above). Whenever th
 Grocery-agent sets `sensor.grocery_shopping_list` in Home Assistant: its state is the number of items still
 to buy, and its attributes carry `items` (a list of names) and `text` (them joined with ", "). The zone
 trigger and the notification itself are a Home Assistant automation you write, since only you know which
-zones and person to use. An example, adjust the zone and entity names to yours:
+zones and tracker to use. An entry for `automations.yaml` (current trigger/condition/action schema; adjust
+the zone and tracker entity to yours):
 
 ```yaml
-automation:
-  - alias: "Grocery list reminder"
-    id: "grocery_list_reminder"
-    trigger:
-      - platform: zone
-        entity_id: person.joren
-        zone: zone.lidl
-        event: enter
-      - platform: zone
-        entity_id: person.joren
-        zone: zone.plus
-        event: enter
-      - platform: zone
-        entity_id: person.joren
-        zone: zone.jumbo
-        event: enter
-      - platform: zone
-        entity_id: person.joren
-        zone: zone.aldi
-        event: enter
-    condition:
-      - condition: template
-        value_template: "{{ state('sensor.grocery_shopping_list') | int(0) > 0 }}"
-    action:
-      - action: notify.mobile_app_joren_iphone
-        data:
-          title: "Shopping list"
-          message: "{{ state_attr('sensor.grocery_shopping_list', 'text') }}"
+- id: "1759000000000"
+  alias: Grocery list reminder
+  description: Reminds me what's on the list when I arrive at Lidl, Plus, Jumbo or Aldi
+  mode: single
+  triggers:
+    - trigger: zone
+      entity_id: device_tracker.iphone_16_van_joren
+      zone: zone.lidl
+      event: enter
+    - trigger: zone
+      entity_id: device_tracker.iphone_16_van_joren
+      zone: zone.plus
+      event: enter
+    - trigger: zone
+      entity_id: device_tracker.iphone_16_van_joren
+      zone: zone.jumbo
+      event: enter
+    - trigger: zone
+      entity_id: device_tracker.iphone_16_van_joren
+      zone: zone.aldi
+      event: enter
+  conditions:
+    - condition: template
+      value_template: "{{ state('sensor.grocery_shopping_list') | int(0) > 0 }}"
+  actions:
+    - action: notify.mobile_app_joren_iphone
+      data:
+        title: Shopping list
+        message: "{{ state_attr('sensor.grocery_shopping_list', 'text') }}"
 ```
 
-`id` is required to paste this straight into a YAML automation (Home Assistant otherwise generates one, but
-pasting the same block twice without an id would create a duplicate automation instead of updating it).
+`id` must be unique among your automations (pasting the same block twice without changing it would update
+this automation again rather than create a duplicate, which is usually what you want).
 
 Create the zones under Settings -> Areas, zones & labels -> Zones (drop a pin at each shop, a radius of
-100-150 m is usually enough), and confirm `person.joren` (or whichever) is the entity that tracks your phone.
+100-150 m is usually enough), and confirm the `entity_id` above is the one that tracks your phone's location
+(a `device_tracker.*` or `person.*` entity, whichever your other automations already use).
 
 ### Backups
 
