@@ -248,7 +248,7 @@ the zone and tracker entity to yours):
       event: enter
   conditions:
     - condition: template
-      value_template: "{{ state('sensor.grocery_shopping_list') | int(0) > 0 }}"
+      value_template: "{{ states('sensor.grocery_shopping_list') | int(0) > 0 }}"
   actions:
     - action: notify.mobile_app_joren_iphone
       data:
