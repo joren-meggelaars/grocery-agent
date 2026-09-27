@@ -120,3 +120,171 @@ def test_login_events_are_recorded(client, db):
 
 def test_password_survives_round_trip_through_the_form(client):
     assert login(client, password=PASSWORD).status_code == 303
+
+
+# --- signing in through Authentik --------------------------------------------------------------
+
+import base64
+import json
+import time
+from urllib.parse import parse_qs, urlsplit
+
+from pydantic import SecretStr
+
+from grocery.security import oidc
+
+
+def jwt(claims: dict) -> str:
+    def part(obj) -> str:
+        return base64.urlsafe_b64encode(json.dumps(obj).encode()).rstrip(b"=").decode()
+
+    return f"{part({'alg': 'none'})}.{part(claims)}.sig"
+
+
+ISSUER = "https://auth.example.nl/application/o/grocery-agent/"
+REDIRECT = "https://testserver/login/oidc/callback"
+
+
+def oidc_client(make_client, monkeypatch, group="grocery-agent-admin", **kw):
+    """A client with OIDC enabled and a FakeAuthentik installed for _urllib_fetch.
+
+    Returns (client, nonce_box): nonce_box["nonce"] is filled in by sign_in() once it has parsed the
+    authorize URL the browser would have been sent to (the browser side of that hop is never actually
+    made in these tests, so the fake token endpoint learns the nonce this way instead).
+    """
+    nonce_box: dict = {}
+
+    def fetch(method, url, headers, data):
+        if url.endswith("/.well-known/openid-configuration"):
+            return 200, json.dumps({
+                "issuer": ISSUER, "authorization_endpoint": "https://auth.example.nl/authorize",
+                "token_endpoint": "https://auth.example.nl/token",
+            }).encode()
+        if url == "https://auth.example.nl/token":
+            claims = {
+                "iss": ISSUER, "aud": "grocery-agent", "sub": kw.get("sub", "sub-joren"), "exp": time.time() + 300,
+                "nonce": nonce_box.get("nonce"), "groups": [group] if group else [],
+            }
+            return 200, json.dumps({"id_token": jwt(claims)}).encode()
+        raise AssertionError(url)
+
+    monkeypatch.setattr(oidc, "_urllib_fetch", fetch)
+    client = make_client(
+        oidc_issuer=ISSUER, oidc_client_secret=SecretStr("s3cret"), oidc_redirect_uris=REDIRECT,
+        allowed_hosts=["testserver"],
+    )
+    return client, nonce_box
+
+
+def sign_in(client, nonce_box, next_url="/"):
+    """Follows Start -> Authentik's authorize page (never actually called) -> our own callback."""
+    start = client.get(f"/login/oidc?next={next_url}")
+    assert start.status_code == 303
+    query = parse_qs(urlsplit(start.headers["location"]).query)
+    nonce_box["nonce"] = query["nonce"][0]
+    cookie = start.headers["set-cookie"]
+    pending = cookie.split("oidc_pending=", 1)[1].split(";", 1)[0]
+    client.cookies.set("oidc_pending", pending)
+    return client.get("/login/oidc/callback", params={"code": "the-code", "state": query["state"][0]})
+
+
+def _oidc_db(client):
+    return client.app.state.session_factory()
+
+
+def test_signing_in_links_to_an_existing_user(make_client, monkeypatch):
+    from grocery.cli import link_oidc
+
+    client, box = oidc_client(make_client, monkeypatch)
+    with _oidc_db(client) as db:
+        link_oidc(db, "joren", "sub-joren")
+    resp = sign_in(client, box, "/receipts")
+    assert resp.status_code == 303 and resp.headers["location"] == "/receipts"
+    assert "joren" in client.get("/").text
+    assert "__Host-session=" in resp.headers["set-cookie"] or "session=" in resp.headers["set-cookie"]
+
+
+def test_the_pending_cookie_is_cleared_after_signing_in(make_client, monkeypatch):
+    from grocery.cli import link_oidc
+
+    client, box = oidc_client(make_client, monkeypatch)
+    with _oidc_db(client) as db:
+        link_oidc(db, "joren", "sub-joren")
+    resp = sign_in(client, box)
+    assert "oidc_pending=;" in resp.headers["set-cookie"] or 'oidc_pending=""' in resp.headers["set-cookie"]
+
+
+def test_a_group_member_not_linked_to_a_local_user_is_denied(make_client, monkeypatch):
+    client, box = oidc_client(make_client, monkeypatch, sub="unlinked-sub")
+    resp = sign_in(client, box)
+    assert resp.status_code == 403 and "not linked" in resp.text
+    assert "__Host-session=" not in resp.headers.get("set-cookie", "") or "Max-Age=0" in resp.headers["set-cookie"]
+
+
+def test_someone_outside_the_admin_group_is_denied(make_client, monkeypatch):
+    from grocery.cli import link_oidc
+
+    client, box = oidc_client(make_client, monkeypatch, group="some-other-group")
+    with _oidc_db(client) as db:
+        link_oidc(db, "joren", "sub-joren")
+    resp = sign_in(client, box)
+    assert resp.status_code == 403 and "not linked" in resp.text
+
+
+def test_a_deactivated_user_cannot_sign_in_through_oidc(make_client, monkeypatch):
+    from sqlalchemy import select
+
+    from grocery.cli import link_oidc
+    from grocery.db.models import User
+
+    client, box = oidc_client(make_client, monkeypatch)
+    with _oidc_db(client) as db:
+        link_oidc(db, "joren", "sub-joren")
+        db.get(User, db.scalar(select(User.id))).is_active = False
+        db.commit()
+    resp = sign_in(client, box)
+    assert resp.status_code == 403
+
+
+def test_cancelling_at_authentik_shows_a_friendly_message(make_client, monkeypatch):
+    client, box = oidc_client(make_client, monkeypatch)
+    client.get("/login/oidc")  # sets a pending cookie, never used
+    resp = client.get("/login/oidc/callback", params={"error": "access_denied"})
+    assert resp.status_code == 400 and "cancelled or refused" in resp.text
+
+
+def test_a_callback_without_a_pending_cookie_fails_cleanly(make_client, monkeypatch):
+    client, box = oidc_client(make_client, monkeypatch)
+    resp = client.get("/login/oidc/callback", params={"code": "x", "state": "y"})
+    assert resp.status_code == 400 and "Sign-in failed" in resp.text
+
+
+def test_the_login_page_has_no_authentik_button_by_default(client):
+    assert "Sign in with Authentik" not in client.get("/login").text
+
+
+def test_the_login_page_offers_the_authentik_button_when_configured(make_client, monkeypatch):
+    client, box = oidc_client(make_client, monkeypatch)
+    page = client.get("/login").text
+    assert "Sign in with Authentik" in page and 'href="/login/oidc' in page
+
+
+def test_the_oidc_routes_are_reachable_while_signed_out(make_client, monkeypatch):
+    client, box = oidc_client(make_client, monkeypatch)
+    assert client.get("/login/oidc").status_code == 303
+    assert client.get("/login/oidc/callback").status_code == 400
+
+
+def test_the_oidc_routes_redirect_to_login_when_oidc_is_off(client):
+    assert client.get("/login/oidc").status_code == 303
+    assert client.get("/login/oidc").headers["location"] == "/login"
+
+
+def test_a_denied_sign_in_is_recorded_and_can_trip_the_lockout(make_client, monkeypatch):
+    client, box = oidc_client(make_client, monkeypatch, sub="unlinked-sub")
+    sign_in(client, box)
+    from grocery.db.models import AuthEvent
+
+    with _oidc_db(client) as db:
+        events = db.scalars(select(AuthEvent).order_by(AuthEvent.id)).all()
+    assert events and events[-1].kind == "login_fail" and "unlinked-sub" in events[-1].username

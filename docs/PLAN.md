@@ -228,3 +228,17 @@ where SQL can decide, per-task model setting. To be measured from the logged tok
   the normalised name, so any shop and spelling), or something else (this offer only, with your own words). Every reason can carry a
   note. They are stored as `deal_rules` and applied in every evaluation, so they survive the nightly refresh and never alert;
   the page lists them with a Remove button. Needs `deals.private_label` (migration 0008).
+
+## Sign-in through Authentik (added later, identity-platform repo)
+
+Same pattern as Clothing Advisor's `clothing_advisor/oidc.py` and TrendWatcher's `app/oidc.py`: authorization-code
+flow with PKCE, pending sign-in kept in a short-lived signed cookie (no server-side storage before login), id_token
+read straight from a direct server-to-server call to the token endpoint (OIDC Core 3.1.3.7's alternative to checking
+its signature), issuer/audience/expiry/nonce checked here. `grocery/security/oidc.py`; login routes in
+`grocery/web/routes_auth.py` (`/login/oidc`, `/login/oidc/callback`, both `@public`).
+
+Difference from CA/TW: this app already has several named accounts (not a single fixed admin), so being in the
+Authentik group (`grocery-agent-admin`) is necessary but not sufficient — the Authentik subject must also be linked
+to a local `User` row (`users.oidc_sub`, migration 0009), the same way `TS_IDENTITY_MODE=sso` links a Tailscale
+login. `grocery.cli link-oidc <username> <sub>` / `unlink-oidc`; `create-user --oidc-sub` for a fresh account.
+Password login stays as the emergency way in. Blueprint: `identity-platform/blueprints/grocery-agent.yaml`.

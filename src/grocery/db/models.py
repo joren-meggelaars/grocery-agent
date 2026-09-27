@@ -28,6 +28,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255))
     # Tailscale login (e-mail) that maps to this user in TS_IDENTITY_MODE=sso.
     tailscale_login: Mapped[str | None] = mapped_column(String(255), unique=True)
+    # Authentik subject ("sub" claim) that maps to this user when signing in through OIDC.
+    oidc_sub: Mapped[str | None] = mapped_column(String(255), unique=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 

@@ -10,6 +10,8 @@ EXPECTED_PUBLIC = {
     ("/healthz", "GET"),
     ("/login", "GET"),
     ("/login", "POST"),
+    ("/login/oidc", "GET"),
+    ("/login/oidc/callback", "GET"),
     ("/sw.js", "GET"),  # service worker and manifest: nothing private in them
     ("/manifest.webmanifest", "GET"),
 }

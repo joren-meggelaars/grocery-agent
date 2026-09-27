@@ -191,7 +191,28 @@ docker compose logs --tail 100 app                # logs
 docker compose run --rm app python -m grocery.cli set-password joren      # also signs out all devices
 docker compose run --rm app python -m grocery.cli unlock joren            # clear a login lockout
 docker compose run --rm app python -m grocery.cli revoke-sessions joren
+docker compose run --rm app python -m grocery.cli link-oidc joren <authentik-subject>   # see below
 ```
+
+### Sign in through Authentik (optional)
+
+Off by default (`OIDC_ISSUER` empty): only the username/password login. To add it:
+
+1. On the identity-platform stack: `docker network create identity-apps` if not already done for another app,
+   put `GROCERY_AGENT_OIDC_SECRET=$(openssl rand -hex 24)` in its `.env`, drop `blueprints/grocery-agent.yaml`
+   into `blueprints/` and restart it. That creates the `grocery-agent-admin` group, the application and the
+   OAuth2 provider in Authentik.
+2. Put yourself (or whoever should be able to sign in) in the `grocery-agent-admin` group in Authentik.
+3. In this app's `.env`, set `OIDC_ISSUER` (from Authentik's application page), `OIDC_CLIENT_SECRET` (the same
+   `GROCERY_AGENT_OIDC_SECRET`), and `OIDC_REDIRECT_URIS` (the address this app is opened on, ending in
+   `/login/oidc/callback`). `docker compose up -d --build` to pick it up and join the `identity-apps` network.
+4. Being in the Authentik group is not enough by itself: this app has its own named accounts, so link one to
+   the Authentik subject (Directory -> Users -> the person -> "UID" in Authentik):
+   `docker compose run --rm app python -m grocery.cli link-oidc <username> <that UID>`
+
+The login page then shows a "Sign in with Authentik" button; the password login stays underneath as the
+emergency way in if Authentik is ever down. `docker compose run --rm app python -m grocery.cli unlink-oidc
+<username>` removes the link again.
 
 ### Backups
 

@@ -20,6 +20,13 @@ x-app-env: &app-env
   HA_URL: ${HA_URL:-}
   HA_TOKEN: ${HA_TOKEN:-}
   HA_NOTIFY_SERVICE: ${HA_NOTIFY_SERVICE:-}
+  OIDC_ISSUER: ${OIDC_ISSUER:-}
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-grocery-agent}
+  OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+  OIDC_REDIRECT_URIS: ${OIDC_REDIRECT_URIS:-}
+  OIDC_INTERNAL_URL: ${OIDC_INTERNAL_URL:-}
+  OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-grocery-agent-admin}
+  OIDC_SESSION_DAYS: ${OIDC_SESSION_DAYS:-7}
   LLM_MONTHLY_BUDGET_EUR: ${LLM_MONTHLY_BUDGET_EUR:-5}
   MONTHLY_REFERENCE_EUR: ${MONTHLY_REFERENCE_EUR:-400}
   FILES_DIR: /data/files
@@ -67,7 +74,10 @@ services:
       - "127.0.0.1:8090:8000"
     volumes:
       - files:/data
-    networks: [web, backend]
+    # identity-apps: reaches Authentik (single sign-on) over a private network shared with the
+    # identity-platform stack, without going through a public name. Create it once on the host:
+    # docker network create identity-apps. Only needed when OIDC_ISSUER is set.
+    networks: [web, backend, identity-apps]
     <<: *hardening
     mem_limit: 1g               # decoding large photos and rendering PDFs needs headroom
     logging: *logging
@@ -100,6 +110,8 @@ networks:
   backend:
     internal: true
   egress: {}
+  identity-apps:
+    external: true
 
 volumes:
   pgdata:

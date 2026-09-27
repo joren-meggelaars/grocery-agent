@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from grocery.db.models import AuthSession, User
-from grocery.security import ratelimit
+from grocery.security import oidc, ratelimit
 from grocery.security.deps import Principal, current_principal, get_db, public
 from grocery.security.passwords import hash_password, needs_rehash, verify_password
 from grocery.security.sessions import create_session, revoke_all, revoke_session
@@ -30,9 +30,16 @@ def _client_ip(request: Request) -> str | None:
 
 
 def _login_page(request: Request, next_url: str, error: str | None = None, status: int = 200):
+    settings = request.app.state.settings
     return templates.TemplateResponse(
-        request, "login.html", {"error": error, "next": next_url}, status_code=status
+        request, "login.html",
+        {"error": error, "next": next_url, "oidc_enabled": oidc.enabled(settings)},
+        status_code=status,
     )
+
+
+def _clear_pending(response: RedirectResponse | HTMLResponse, settings) -> None:
+    response.delete_cookie(oidc.PENDING_COOKIE, path="/login", secure=settings.cookie_secure, samesite="lax")
 
 
 def _start_session(request: Request, db: Session, user: User, next_url: str) -> RedirectResponse:
@@ -109,6 +116,70 @@ def login(
         db.commit()
     ratelimit.record(db, "login_ok", name, ip)
     return _start_session(request, db, user, next_url)
+
+
+@router.get("/login/oidc")
+@public
+def oidc_start(request: Request, next: str = "/"):
+    settings = request.app.state.settings
+    if not oidc.enabled(settings):
+        return RedirectResponse("/login", status_code=303)
+    destination = _safe_next(next)
+    try:
+        target, cookie = oidc.Oidc(settings).start(request.headers.get("host", ""), destination)
+    except oidc.OidcError as exc:
+        log.warning("oidc sign-in could not start: %s", exc)
+        return _login_page(request, destination, "The sign-in service is not reachable right now. Log in with your password.", 502)
+    response = RedirectResponse(target, status_code=303)
+    response.set_cookie(
+        oidc.PENDING_COOKIE, cookie, max_age=oidc.PENDING_TTL, httponly=True,
+        secure=settings.cookie_secure, samesite="lax", path="/login",
+    )
+    return response
+
+
+@router.get("/login/oidc/callback", response_class=HTMLResponse)
+@public
+def oidc_callback(
+    request: Request, code: str = "", state: str = "", error: str = "", db: Session = Depends(get_db)
+):
+    settings = request.app.state.settings
+    if not oidc.enabled(settings):
+        return RedirectResponse("/login", status_code=303)
+    ip = _client_ip(request)
+    denied = "Your Authentik account is not linked to a user here. Ask the admin to link it, or sign in with your password."
+
+    if error:
+        log.info("oidc sign-in refused by Authentik: %s", error)
+        response = _login_page(request, "/", "Sign-in was cancelled or refused.", 400)
+        _clear_pending(response, settings)
+        return response
+    try:
+        sub, destination = oidc.Oidc(settings).finish(code, state, request.cookies.get(oidc.PENDING_COOKIE))
+    except oidc.OidcDenied as exc:
+        log.warning("oidc sign-in denied: %s", exc)
+        ratelimit.record(db, "login_fail", f"oidc:{exc}"[:64], ip)
+        response = _login_page(request, "/", denied, 403)
+        _clear_pending(response, settings)
+        return response
+    except oidc.OidcError as exc:
+        log.warning("oidc sign-in failed: %s", exc)
+        response = _login_page(request, "/", "Sign-in failed. Try again, or sign in with your password.", 400)
+        _clear_pending(response, settings)
+        return response
+
+    user = db.scalar(select(User).where(User.oidc_sub == sub, User.is_active.is_(True)))
+    if user is None:
+        log.warning("oidc sign-in denied: %s has no linked user", sub)
+        ratelimit.record(db, "login_fail", f"oidc:{sub}"[:64], ip)
+        response = _login_page(request, "/", denied, 403)
+        _clear_pending(response, settings)
+        return response
+
+    ratelimit.record(db, "login_ok", user.username, ip, "oidc")
+    response = _start_session(request, db, user, destination)
+    _clear_pending(response, settings)
+    return response
 
 
 @router.post("/logout")

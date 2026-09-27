@@ -40,7 +40,9 @@ def _get_user(db: Session, username: str) -> User:
     return user
 
 
-def create_user(db: Session, username: str, password: str, tailscale_login: str | None = None) -> User:
+def create_user(
+    db: Session, username: str, password: str, tailscale_login: str | None = None, oidc_sub: str | None = None
+) -> User:
     name = _normalise(username)
     if db.scalar(select(User).where(User.username == name)):
         raise CliError(f"User already exists: {name}")
@@ -52,10 +54,35 @@ def create_user(db: Session, username: str, password: str, tailscale_login: str 
         username=name,
         password_hash=password_hash,
         tailscale_login=tailscale_login.strip().lower() if tailscale_login else None,
+        oidc_sub=oidc_sub.strip() if oidc_sub else None,
     )
     db.add(user)
     db.commit()
     return user
+
+
+def link_oidc(db: Session, username: str, sub: str) -> None:
+    """Link this user to an Authentik subject, the way TS_IDENTITY_MODE=sso links a Tailscale login.
+
+    Being in the Authentik group named by OIDC_ADMIN_GROUP is not enough by itself to sign in: this app
+    supports several named accounts, so a group membership alone does not say which local account it is.
+    Find `sub` under Authentik's Directory -> Users -> (the person) -> "UID", or in an Events entry for a
+    login attempt on this app (the id_token's claims are logged there).
+    """
+    user = _get_user(db, username)
+    sub = sub.strip()
+    if not sub:
+        raise CliError("The Authentik subject cannot be empty.")
+    other = db.scalar(select(User).where(User.oidc_sub == sub))
+    if other is not None and other.id != user.id:
+        raise CliError(f"That Authentik subject is already linked to {other.username}.")
+    user.oidc_sub = sub
+    db.commit()
+
+
+def unlink_oidc(db: Session, username: str) -> None:
+    _get_user(db, username).oidc_sub = None
+    db.commit()
 
 
 def set_password(db: Session, username: str, password: str) -> None:
@@ -89,7 +116,15 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("create-user", help="create the login user")
     p.add_argument("username")
     p.add_argument("--tailscale-login", help="Tailscale account e-mail (for TS_IDENTITY_MODE=sso)")
+    p.add_argument("--oidc-sub", help="Authentik subject (for signing in through Authentik)")
     p.add_argument("--password-stdin", action="store_true")
+
+    p = sub.add_parser("link-oidc", help="link an existing user to an Authentik account")
+    p.add_argument("username")
+    p.add_argument("sub", help="the Authentik subject (Directory -> Users -> UID)")
+
+    p = sub.add_parser("unlink-oidc", help="remove a user's Authentik link")
+    p.add_argument("username")
 
     p = sub.add_parser("set-password", help="change a password (signs out all devices)")
     p.add_argument("username")
@@ -111,9 +146,15 @@ def main(argv: Sequence[str] | None = None, session_factory: Callable[[], Sessio
         with session_factory() as db:
             if args.command == "create-user":
                 user = create_user(
-                    db, args.username, _read_password(args.password_stdin), args.tailscale_login
+                    db, args.username, _read_password(args.password_stdin), args.tailscale_login, args.oidc_sub
                 )
                 print(f"Created user {user.username}.")
+            elif args.command == "link-oidc":
+                link_oidc(db, args.username, args.sub)
+                print(f"Linked {args.username} to that Authentik account.")
+            elif args.command == "unlink-oidc":
+                unlink_oidc(db, args.username)
+                print(f"Removed the Authentik link for {args.username}.")
             elif args.command == "set-password":
                 set_password(db, args.username, _read_password(args.password_stdin))
                 print("Password changed; all sessions revoked.")

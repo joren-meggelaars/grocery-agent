@@ -65,3 +65,48 @@ def test_revoke_sessions(client, db, capsys):
 def test_unknown_user_is_an_error_not_a_traceback(client, capsys):
     assert main(["unlock", "ghost"], client.app.state.session_factory) == 1
     assert "No such user" in capsys.readouterr().err
+
+
+# --- OIDC linking -------------------------------------------------------------------------------
+
+def test_create_user_with_an_oidc_sub(monkeypatch, client, db):
+    _stdin(monkeypatch, "another long password\n")
+    assert main(["create-user", "alice", "--oidc-sub", "sub-123", "--password-stdin"], client.app.state.session_factory) == 0
+    user = db.scalar(select(User).where(User.username == "alice"))
+    assert user.oidc_sub == "sub-123"
+
+
+def test_link_and_unlink_oidc(client, db, capsys):
+    factory = client.app.state.session_factory
+    assert main(["link-oidc", "joren", "sub-abc"], factory) == 0
+    db.expire_all()
+    assert db.scalar(select(User).where(User.username == "joren")).oidc_sub == "sub-abc"
+    assert "Linked joren" in capsys.readouterr().out
+    assert main(["unlink-oidc", "joren"], factory) == 0
+    db.expire_all()
+    assert db.scalar(select(User).where(User.username == "joren")).oidc_sub is None
+    assert "Removed the Authentik link" in capsys.readouterr().out
+
+
+def test_link_oidc_strips_the_subject_and_rejects_an_empty_one(client, capsys, db):
+    factory = client.app.state.session_factory
+    assert main(["link-oidc", "joren", "  sub-xyz  "], factory) == 0
+    db.expire_all()
+    assert db.scalar(select(User).where(User.username == "joren")).oidc_sub == "sub-xyz"
+    assert main(["link-oidc", "joren", "   "], factory) == 1
+    assert "cannot be empty" in capsys.readouterr().err
+
+
+def test_link_oidc_refuses_to_double_book_a_subject(monkeypatch, client, capsys, db):
+    _stdin(monkeypatch, "another long password\n")
+    main(["create-user", "alice", "--password-stdin"], client.app.state.session_factory)
+    main(["link-oidc", "joren", "shared-sub"], client.app.state.session_factory)
+    assert main(["link-oidc", "alice", "shared-sub"], client.app.state.session_factory) == 1
+    assert "already linked to joren" in capsys.readouterr().err
+    # re-linking the same user to the same subject is a no-op, not an error
+    assert main(["link-oidc", "joren", "shared-sub"], client.app.state.session_factory) == 0
+
+
+def test_link_oidc_unknown_user(client, capsys):
+    assert main(["link-oidc", "ghost", "sub-1"], client.app.state.session_factory) == 1
+    assert "No such user" in capsys.readouterr().err
