@@ -10,17 +10,32 @@
       {% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
       {% if oidc_enabled %}
       <a class="btn primary big" href="/login/oidc?next={{ next|urlencode }}">Sign in with Authentik</a>
-      <p class="muted" style="text-align:center; margin: 0.75rem 0;">or with your password</p>
-      {% endif %}
+      {# Closed by default: a password field that is merely hidden with CSS still gets prompted for by most
+         credential managers, but one inside a closed <details> is not in the rendered tree at all, so it
+         is left alone. Opens by itself after a failed attempt, so the error and the form are not hidden. #}
+      <details class="spaced"{% if error %} open{% endif %}>
+        <summary class="muted">Use your password instead</summary>
+        <form method="post" action="/login" class="stack">
+          <input type="hidden" name="next" value="{{ next }}">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" autocomplete="username"
+                 autocapitalize="none" autocorrect="off" spellcheck="false" required>
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+          <button type="submit" class="btn big">Sign in</button>
+        </form>
+      </details>
+      {% else %}
       <form method="post" action="/login" class="stack">
         <input type="hidden" name="next" value="{{ next }}">
         <label for="username">Username</label>
         <input id="username" name="username" type="text" autocomplete="username"
-               autocapitalize="none" autocorrect="off" spellcheck="false" required {{ "" if oidc_enabled else "autofocus" }}>
+               autocapitalize="none" autocorrect="off" spellcheck="false" required autofocus>
         <label for="password">Password</label>
         <input id="password" name="password" type="password" autocomplete="current-password" required>
-        <button type="submit" class="btn{{ "" if oidc_enabled else " primary" }} big">Sign in</button>
+        <button type="submit" class="btn primary big">Sign in</button>
       </form>
+      {% endif %}
     </div>
   </main>
 </div>

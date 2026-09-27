@@ -269,6 +269,25 @@ def test_the_login_page_offers_the_authentik_button_when_configured(make_client,
     assert "Sign in with Authentik" in page and 'href="/login/oidc' in page
 
 
+def test_the_password_form_is_hidden_behind_a_closed_disclosure_when_oidc_is_on(make_client, monkeypatch):
+    client, box = oidc_client(make_client, monkeypatch)
+    page = client.get("/login").text
+    assert "<details" in page and "<details open" not in page
+    assert 'name="password"' in page  # present in the markup, just not open by default
+    assert "autofocus" not in page  # nothing should grab focus out of the closed details
+
+
+def test_the_password_form_reopens_after_a_failed_attempt(make_client, monkeypatch):
+    client, box = oidc_client(make_client, monkeypatch)
+    resp = client.post("/login", data={"username": "joren", "password": "wrong wrong wrong", "next": "/"})
+    assert resp.status_code == 401 and '<details class="spaced" open>' in resp.text
+
+
+def test_the_password_form_is_shown_directly_when_oidc_is_off(client):
+    page = client.get("/login").text
+    assert "<details" not in page and "autofocus" in page and 'name="password"' in page
+
+
 def test_the_oidc_routes_are_reachable_while_signed_out(make_client, monkeypatch):
     client, box = oidc_client(make_client, monkeypatch)
     assert client.get("/login/oidc").status_code == 303
