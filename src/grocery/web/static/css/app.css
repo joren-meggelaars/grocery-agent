@@ -348,3 +348,7 @@ details > summary { cursor: pointer; padding: 0.7rem 0; font-weight: 600; }
 .deal .dismiss { margin-top: 0.4rem; }
 .deal .dismiss summary { color: var(--muted); font-weight: 500; font-size: 0.9rem; padding: 0.4rem 0; }
 .deal .dismiss .stack { padding: 0.5rem 0 0.25rem; }
+
+/* shopping list */
+.shopping-item.bought { opacity: 0.55; }
+.shopping-item.bought strong { text-decoration: line-through; }

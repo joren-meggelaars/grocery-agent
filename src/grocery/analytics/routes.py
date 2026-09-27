@@ -107,6 +107,7 @@ def regulars(
         "analytics/regulars.html",
         {
             "user": principal.user,
+            "csrf_token": principal.csrf_token,
             "period": period,
             "periods": PERIODS,
             "stats": stats,

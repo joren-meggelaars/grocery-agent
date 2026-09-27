@@ -22,6 +22,8 @@
   <a class="tile" href="/receipts/new"><svg class="icon" aria-hidden="true"><use href="#i-receipt"/></svg>Add receipt<small>Photo or PDF</small></a>
   <a class="tile" href="/capture/queue"><svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg>Captures
     <small>{% if to_review %}{{ to_review }} to review{% else %}Nothing to review{% endif %}</small></a>
+  <a class="tile" href="/shopping-list"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg>Shopping list
+    <small>{% if to_buy %}{{ to_buy }} to buy{% else %}Nothing on it{% endif %}</small></a>
   <a class="tile" href="/cupboard"><svg class="icon" aria-hidden="true"><use href="#i-box"/></svg>Products at home<small>Your list to compare</small></a>
   <a class="tile" href="/deals"><svg class="icon" aria-hidden="true"><use href="#i-tag"/></svg>Deals<small>Worth a look this week</small></a>
   <a class="tile" href="/regulars"><svg class="icon" aria-hidden="true"><use href="#i-star"/></svg>What I buy most<small>Ranked by visits</small></a>

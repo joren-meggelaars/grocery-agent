@@ -22,6 +22,12 @@
     {% set v = overview[s.product_id] %}
     <p class="muted">Last: {{ s.last_on.strftime("%d %b") }}, {{ s.last_store }}{% if v.last %} ({{ eur(v.last.value) }} {{ basis_label[v.basis] }}){% endif %}</p>
     <p>{{ alternative(v.alternative, v.pct, v.basis, v.incomparable, eur) }}</p>
+    <form method="post" action="/shopping-list/add-product">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="product_id" value="{{ s.product_id }}">
+      <input type="hidden" name="next" value="/regulars?period={{ period }}">
+      <button type="submit" class="btn">Add to shopping list</button>
+    </form>
   </li>
   {% endfor %}
 </ul>

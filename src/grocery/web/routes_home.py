@@ -11,6 +11,7 @@ from grocery.db.base import utcnow
 from grocery.llm.budget import budget_state
 from grocery.security.deps import Principal, current_principal, get_db, public
 from grocery.settings_store import effective
+from grocery.shopping.service import pending_count
 from grocery.web.templating import templates
 
 router = APIRouter()
@@ -48,6 +49,7 @@ def home(
             "csrf_token": principal.csrf_token,
             "budget": budget_state(db, settings, cap=eff.llm_monthly_budget_eur),
             "to_review": review_count(db),
+            "to_buy": pending_count(db),
             "month": start,
             "food_cents": summary.food_cents,
             "reference": against_reference(summary.food_cents, round(eff.monthly_reference_eur * 100)),

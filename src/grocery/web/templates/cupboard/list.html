@@ -51,6 +51,12 @@
     {% else %}
       <p class="muted">No price seen yet. Scan its shelf label in the shop, or save a receipt with this product.</p>
     {% endif %}
+    <form method="post" action="/shopping-list/add-product">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="product_id" value="{{ r.item.product_id }}">
+      <input type="hidden" name="next" value="/cupboard">
+      <button type="submit" class="btn">Add to shopping list</button>
+    </form>
     <form method="post" action="/cupboard/items/{{ r.item.id }}/remove" data-confirm="Remove {{ r.name }} from the list?">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button type="submit" class="btn">Remove</button>

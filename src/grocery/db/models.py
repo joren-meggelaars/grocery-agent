@@ -440,3 +440,19 @@ class DealRule(Base):
     label: Mapped[str] = mapped_column(String(300))  # the offer it was said about, to show in the list
     note: Mapped[str | None] = mapped_column(String(300))  # your own words
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class ShoppingListItem(Base):
+    """One thing to buy. Matched to a Product where the typed name or barcode resolves to one, so it can
+    carry price advice; kept as free text otherwise. No quantities, same as CupboardItem."""
+
+    __tablename__ = "shopping_list_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int | None] = mapped_column(ForeignKey("products.id", ondelete="SET NULL"))
+    raw_name: Mapped[str] = mapped_column(String(200))
+    note: Mapped[str | None] = mapped_column(String(200))
+    added_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    bought_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+    product: Mapped[Product | None] = relationship()

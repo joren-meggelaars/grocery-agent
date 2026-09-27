@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Shopping list - Grocery Agent{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/">&larr; Home</a></p>
+<h1>Shopping list</h1>
+<p class="muted">Add what you need; each item shows where it is cheapest right now, based on current offers and
+  your price history.</p>
+{% if error %}<p class="alert" role="alert">{{ error }}</p>{% endif %}
+
+<div id="sl-toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<form method="post" action="/shopping-list/add" class="stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <div class="grid2">
+    <label>Product
+      <input type="text" name="product" list="products" class="big" maxlength="200" required
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+    </label>
+    <label>Note (optional)
+      <input type="text" name="note" maxlength="200" autocomplete="off" autocorrect="off" spellcheck="false">
+    </label>
+  </div>
+  <button type="submit" class="btn primary big">Add</button>
+</form>
+<datalist id="products">{% for name in product_names %}<option value="{{ name }}">{% endfor %}</datalist>
+
+<details class="card spaced">
+  <summary>Scan a barcode instead</summary>
+  <button type="button" class="btn big primary" id="sl-start">Start camera</button>
+  <button type="button" class="btn big" id="sl-stop" hidden>Stop camera</button>
+  <div id="sl-scanner" class="scanner" hidden>
+    <video id="sl-video" playsinline muted></video>
+  </div>
+  <p class="muted">Only barcodes already known here (scanned before, or on a receipt) can be added this way.</p>
+</details>
+
+{% if rows %}
+<ul class="list spaced">
+  {% for r in rows %}
+  <li class="card shopping-item{{ ' bought' if r.item.bought_at }}">
+    <div class="regular-head">
+      <strong>{{ r.name }}</strong>
+      <form method="post" action="/shopping-list/items/{{ r.item.id }}/bought">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="star{{ ' on' if r.item.bought_at }}" aria-pressed="{{ 'true' if r.item.bought_at else 'false' }}"
+                aria-label="{{ 'Bought: tap to undo' if r.item.bought_at else 'Mark as bought' }}">{{ "&#10003;"|safe if r.item.bought_at else "&#9744;"|safe }}</button>
+      </form>
+    </div>
+    {% if r.item.note %}<p class="muted">{{ r.item.note }}</p>{% endif %}
+    {% if r.advice %}
+      <p class="cheaper">
+        <strong>{{ r.advice.store }}, EUR {{ "%.2f"|format(r.advice.price_cents / 100) }} {{ basis_label[r.advice.basis] }}</strong>
+        {% if r.advice.lidl_tip %}<span class="muted">(savings tip)</span>{% endif %}
+        {% if r.advice.note %}<span class="muted">({{ r.advice.note }})</span>{% endif %}
+        {% if r.advice.source %}<span class="muted">&middot; Source: {{ r.advice.source }}</span>{% endif %}
+      </p>
+    {% elif r.item.product_id %}
+      <p class="muted">No price history yet.</p>
+    {% endif %}
+    <form method="post" action="/shopping-list/items/{{ r.item.id }}/remove">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn">Remove</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+<form method="post" action="/shopping-list/clear-bought" class="stack spaced">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <button type="submit" class="btn">Clear bought items</button>
+</form>
+{% else %}
+<p class="card spaced">Nothing on your list yet.</p>
+{% endif %}
+
+<script src="{{ static_url('vendor/zxing/zxing-library.min.js') }}" defer></script>
+<script src="{{ static_url('js/scanner.js') }}" defer></script>
+<script src="{{ static_url('js/shopping_scan.js') }}" defer></script>
+{% endblock %}

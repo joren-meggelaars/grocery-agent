@@ -242,3 +242,24 @@ Authentik group (`grocery-agent-admin`) is necessary but not sufficient — the 
 to a local `User` row (`users.oidc_sub`, migration 0009), the same way `TS_IDENTITY_MODE=sso` links a Tailscale
 login. `grocery.cli link-oidc <username> <sub>` / `unlink-oidc`; `create-user --oidc-sub` for a fresh account.
 Password login stays as the emergency way in. Blueprint: `identity-platform/blueprints/grocery-agent.yaml`.
+
+## Shopping list (added later)
+
+Add products to one running list (typed with fuzzy matching against known products, a barcode scan, or an
+"Add to shopping list" button on What I buy most / Products at home); check them off, or remove them. No
+quantities, same minimalism as Products at home.
+
+Per item with a matched product, advice at read time (`shopping/service.py: build_advice`), in this order:
+1. **An active deal for this exact product** (`deals.matched_product_id`), cheapest one if several — not
+   gated by the deals radar's alert thresholds, since here the question was asked directly. PrijsProfeet
+   named as the source (their terms), as on the Deals page.
+2. **The cheapest recent price known** (`prices/feedback.py: price_overview`, already built for What I buy
+   most/Products at home): the alternative store when it is cheaper than where you last paid, else your
+   last store.
+3. **No advice** when there is no matched product or no price history yet.
+
+Lidl is called out explicitly ("savings tip") whenever it is the answer in either branch, since it is your
+declared savings target. Matching a typed name to a product reuses the same fuzzy text match already used
+for receipt lines (`products/matching.py`, rapidfuzz) rather than a plain substring datalist or a paid
+Claude call — free, and proven; true free-text interpretation ("something for the laundry") would need an
+LLM call and was intentionally left out (adds per-add cost).
