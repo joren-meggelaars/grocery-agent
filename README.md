@@ -210,9 +210,47 @@ Off by default (`OIDC_ISSUER` empty): only the username/password login. To add i
    the Authentik subject (Directory -> Users -> the person -> "UID" in Authentik):
    `docker compose run --rm app python -m grocery.cli link-oidc <username> <that UID>`
 
-The login page then shows a "Sign in with Authentik" button; the password login stays underneath as the
-emergency way in if Authentik is ever down. `docker compose run --rm app python -m grocery.cli unlink-oidc
-<username>` removes the link again.
+The login page then shows a "Sign in with Authentik" button; the password login stays behind a closed
+"Use your password instead" disclosure as the emergency way in if Authentik is ever down (it reopens itself
+after a failed attempt). `docker compose run --rm app python -m grocery.cli unlink-oidc <username>` removes
+the link again.
+
+### Shopping list reminder at Lidl/Plus/Jumbo (optional)
+
+Needs `HA_URL`/`HA_TOKEN` set (same as the deals alerts, see above). Whenever the shopping list changes,
+Grocery-agent sets `sensor.grocery_shopping_list` in Home Assistant: its state is the number of items still
+to buy, and its attributes carry `items` (a list of names) and `text` (them joined with ", "). The zone
+trigger and the notification itself are a Home Assistant automation you write, since only you know which
+zones and person to use. An example, adjust the zone and entity names to yours:
+
+```yaml
+automation:
+  - alias: "Grocery list reminder"
+    trigger:
+      - platform: zone
+        entity_id: person.joren
+        zone: zone.lidl
+        event: enter
+      - platform: zone
+        entity_id: person.joren
+        zone: zone.plus
+        event: enter
+      - platform: zone
+        entity_id: person.joren
+        zone: zone.jumbo
+        event: enter
+    condition:
+      - condition: template
+        value_template: "{{ state('sensor.grocery_shopping_list') | int(0) > 0 }}"
+    action:
+      - action: notify.mobile_app_joren_iphone
+        data:
+          title: "Shopping list"
+          message: "{{ state_attr('sensor.grocery_shopping_list', 'text') }}"
+```
+
+Create the zones under Settings -> Areas, zones & labels -> Zones (drop a pin at each shop, a radius of
+100-150 m is usually enough), and confirm `person.joren` (or whichever) is the entity that tracks your phone.
 
 ### Backups
 

@@ -263,3 +263,15 @@ declared savings target. Matching a typed name to a product reuses the same fuzz
 for receipt lines (`products/matching.py`, rapidfuzz) rather than a plain substring datalist or a paid
 Claude call — free, and proven; true free-text interpretation ("something for the laundry") would need an
 LLM call and was intentionally left out (adds per-add cost).
+
+## Shopping list reminder at the shop (added later)
+
+No new inbound path: Grocery-agent keeps pushing state to Home Assistant outbound over the same `HA_URL`/
+`HA_TOKEN` already used for deals alerts (reused, not duplicated: `grocery/deals/service.py`'s `ha_post`).
+Every time the list changes (add, remove, check off, clear bought) the route queues a background job
+(`ha_shopping_sync`, deduplicated like the deals refresh) that sets `sensor.grocery_shopping_list` in Home
+Assistant: state = item count, attribute `items` = list, attribute `text` = comma-joined names. The actual
+zone-enter trigger and notification are entirely a Home Assistant automation the user builds (zones and the
+tracked person are theirs to define; see README for the automation YAML). Chosen over exposing a new
+inbound endpoint on Grocery-agent: no new network path, no new token, reuses the one HA connection already
+proven for deals alerts.

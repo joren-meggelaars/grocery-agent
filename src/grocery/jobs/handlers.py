@@ -17,6 +17,7 @@ from grocery.deals.client import Fetcher as DealsFetcher
 from grocery.deals.client import PrijsProfeet, http_get
 from grocery.settings_store import effective
 from grocery.jobs import queue
+from grocery.shopping.service import HA_SYNC_JOB, push_state as ha_shopping_push
 from grocery.llm.client import ImageReader, ReaderUnavailable, make_shelf_reader
 from grocery.products.off import Fetcher, http_fetch, lookup
 from grocery.receipts.service import ExtractionRetry, run_extraction
@@ -112,6 +113,11 @@ def _deals_refresh(
     queue.complete(db, job, now)
 
 
+def _ha_shopping_sync(db: Session, settings: Settings, job: Job, ha_post: deals.HaPost, now) -> None:
+    ha_shopping_push(db, settings, post=ha_post)
+    queue.complete(db, job, now)
+
+
 def process_one(
     db: Session,
     settings: Settings,
@@ -137,6 +143,8 @@ def process_one(
             _deals_refresh(db, settings, job, deals_fetch, ha_post, sleep, now)
         elif job.kind == "lookup_ean":
             _lookup_ean(db, settings, job, off_fetch, now)
+        elif job.kind == HA_SYNC_JOB:
+            _ha_shopping_sync(db, settings, job, ha_post, now)
         else:
             queue.fail(db, job, f"unknown job kind {job.kind!r}", retryable=False, now=now)
     except Exception as exc:  # a bug must not kill the worker loop

@@ -54,6 +54,7 @@ def add(product: str = Form(""), note: str = Form(""), db: Session = Depends(get
         service.add_by_name(db, product, note)
     except ConfirmError as exc:
         return RedirectResponse(f"/shopping-list?error={quote(exc.messages[0])}", status_code=303)
+    service.queue_ha_sync(db)
     return RedirectResponse("/shopping-list", status_code=303)
 
 
@@ -63,24 +64,28 @@ def add_product(product_id: int = Form(...), next: str = Form("/shopping-list"),
         service.add_by_product(db, product_id)
     except ConfirmError as exc:
         return RedirectResponse(f"{_safe_next(next)}?error={quote(exc.messages[0])}", status_code=303)
+    service.queue_ha_sync(db)
     return RedirectResponse(_safe_next(next), status_code=303)
 
 
 @pages.post("/items/{item_id}/bought")
 def mark_bought(item_id: int, db: Session = Depends(get_db)):
     service.toggle_bought(db, item_id)
+    service.queue_ha_sync(db)
     return RedirectResponse("/shopping-list", status_code=303)
 
 
 @pages.post("/items/{item_id}/remove")
 def remove_item(item_id: int, db: Session = Depends(get_db)):
     service.remove(db, item_id)
+    service.queue_ha_sync(db)
     return RedirectResponse("/shopping-list", status_code=303)
 
 
 @pages.post("/clear-bought")
 def clear_bought(db: Session = Depends(get_db)):
     service.clear_bought(db)
+    service.queue_ha_sync(db)
     return RedirectResponse("/shopping-list", status_code=303)
 
 
@@ -90,4 +95,5 @@ async def scan(ean: str = Form(""), db: Session = Depends(get_db)):
         item = service.add_by_ean(db, ean)
     except service.InvalidBarcode as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
+    service.queue_ha_sync(db)
     return {"name": item.raw_name}

@@ -4,20 +4,30 @@ price seen recently (your last store when nothing is cheaper elsewhere). Lidl is
 when it is the answer, since it is your savings target.
 """
 
+import http.client
+import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from grocery.config import Settings
 from grocery.db.base import utcnow
-from grocery.db.models import Deal, Product, ProductEan, ShoppingListItem, Store
+from grocery.db.models import Deal, Job, Product, ProductEan, ShoppingListItem, Store
+from grocery.deals.service import HaPost
+from grocery.deals.service import ha_post as _ha_post
+from grocery.jobs.queue import enqueue
 from grocery.prices.feedback import price_overview
 from grocery.products.ean import clean_ean
 from grocery.products.matching import MatchIndex
 from grocery.receipts.service import ConfirmError
 
+log = logging.getLogger(__name__)
+
 LIDL_NAME = "Lidl"
+HA_SYNC_JOB = "ha_shopping_sync"
+HA_ENTITY_ID = "sensor.grocery_shopping_list"
 
 
 class InvalidBarcode(ValueError):
@@ -170,3 +180,46 @@ def clear_bought(db: Session) -> int:
     result = db.execute(delete(ShoppingListItem).where(ShoppingListItem.bought_at.is_not(None)))
     db.commit()
     return result.rowcount
+
+
+# --- Home Assistant: a zone-enter automation at Lidl/Plus/Jumbo can remind you what's still on the list ------
+
+def queue_ha_sync(db: Session, now: datetime | None = None) -> bool:
+    """Ask the worker to push the current list to Home Assistant, unless that is already queued."""
+    if db.scalar(select(Job.id).where(Job.kind == HA_SYNC_JOB, Job.status.in_(("queued", "running"))).limit(1)):
+        return False
+    enqueue(db, HA_SYNC_JOB, {}, now or utcnow())
+    db.commit()
+    return True
+
+
+def pending_names(db: Session) -> list[str]:
+    items = db.scalars(
+        select(ShoppingListItem).where(ShoppingListItem.bought_at.is_(None)).order_by(ShoppingListItem.added_at)
+    )
+    return [i.product.name if i.product else i.raw_name for i in items]
+
+
+def push_state(db: Session, settings: Settings, post: HaPost = _ha_post) -> bool:
+    """Set a Home Assistant sensor to what is still on the list, so a zone-enter automation at the shop can
+    read it into a notification. Not gated by HA_NOTIFY_SERVICE (that is only for the deals alerts): this
+    just needs somewhere in Home Assistant to write the state, the automation itself does the notifying."""
+    if not settings.ha_url or not settings.ha_token:
+        return False
+    names = pending_names(db)
+    url = settings.ha_url.rstrip("/") + f"/api/states/{HA_ENTITY_ID}"
+    payload = {
+        "state": str(len(names))[:255],
+        "attributes": {
+            "friendly_name": "Grocery shopping list",
+            "unit_of_measurement": "items",
+            "items": names,
+            "text": ", ".join(names) if names else "Nothing on the list",
+        },
+    }
+    try:
+        status, _ = post(url, settings.ha_token.get_secret_value(), payload)
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        log.warning("shopping list: could not reach Home Assistant (%s)", type(exc).__name__)
+        return False
+    return status == 200

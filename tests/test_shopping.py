@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from grocery.db.models import Deal, Product, ShoppingListItem
 from grocery.products.normalize import product_key
@@ -373,3 +373,100 @@ def test_the_menu_and_home_tile_link_to_the_shopping_list(session, db):
     assert 'href="/shopping-list"' in client.get("/").text
     service.add_by_name(db, "Brood", "")
     assert "1 to buy" in client.get("/").text
+
+
+# --- Home Assistant: keep a sensor in sync so a zone-enter automation can remind you -----------
+
+def test_pending_names_excludes_bought_items(env):
+    settings, db = env
+    a = service.add_by_name(db, "Brood", "")
+    service.add_by_name(db, "Melk", "")
+    service.toggle_bought(db, a.id)
+    assert service.pending_names(db) == ["Melk"]
+
+
+def test_push_state_sends_the_pending_items(env):
+    settings, db = env
+    service.add_by_name(db, "Brood", "")
+    service.add_by_name(db, "Melk", "")
+    calls = []
+
+    def post(url, token, payload):
+        calls.append((url, token, payload))
+        return 200, b"{}"
+
+    from pydantic import SecretStr
+
+    settings.ha_url, settings.ha_token = "http://ha.local:8123", SecretStr("tok")
+    assert service.push_state(db, settings, post) is True
+    url, token, payload = calls[0]
+    assert url == "http://ha.local:8123/api/states/sensor.grocery_shopping_list" and token == "tok"
+    assert payload["state"] == "2" and payload["attributes"]["items"] == ["Brood", "Melk"]
+    assert payload["attributes"]["text"] == "Brood, Melk"
+
+
+def test_push_state_with_an_empty_list_still_pushes_a_zero(env):
+    settings, db = env
+    from pydantic import SecretStr
+
+    settings.ha_url, settings.ha_token = "http://ha.local:8123", SecretStr("tok")
+    sent = {}
+
+    def post(url, token, payload):
+        sent.update(payload)
+        return 200, b"{}"
+
+    assert service.push_state(db, settings, post) is True
+    assert sent["state"] == "0" and sent["attributes"]["items"] == []
+
+
+def test_push_state_without_ha_configured_does_nothing(env):
+    settings, db = env
+    calls = []
+    assert service.push_state(db, settings, lambda *a: calls.append(a) or (200, b"{}")) is False
+    assert calls == []
+
+
+def test_push_state_handles_a_failed_or_unreachable_ha(env):
+    settings, db = env
+    from pydantic import SecretStr
+
+    settings.ha_url, settings.ha_token = "http://ha.local:8123", SecretStr("tok")
+    assert service.push_state(db, settings, lambda *a: (500, b"nope")) is False
+
+    def down(*a):
+        raise OSError("unreachable")
+
+    assert service.push_state(db, settings, down) is False
+
+
+def test_queue_ha_sync_is_queued_once(env):
+    from grocery.db.models import Job
+
+    settings, db = env
+    assert service.queue_ha_sync(db) is True
+    assert service.queue_ha_sync(db) is False
+    assert db.scalar(select(Job.id).where(Job.kind == service.HA_SYNC_JOB)) is not None
+
+
+def test_the_worker_pushes_state_when_the_sync_job_runs(env):
+    from grocery.db.models import Job
+    from grocery.jobs.handlers import process_one
+    from pydantic import SecretStr
+
+    settings, db = env
+    settings.ha_url, settings.ha_token = "http://ha.local:8123", SecretStr("tok")
+    service.add_by_name(db, "Brood", "")
+    service.queue_ha_sync(db)
+    sent = []
+    process_one(db, settings, lambda s: None, ha_post=lambda *a: sent.append(a) or (200, b"{}"))
+    assert len(sent) == 1 and sent[0][2]["attributes"]["items"] == ["Brood"]
+    assert db.scalar(select(func.count()).select_from(Job).where(Job.status != "done")) == 0
+
+
+def test_a_mutation_via_the_page_queues_a_sync_job(session, db):
+    from grocery.db.models import Job
+
+    client, token = session
+    client.post("/shopping-list/add", data={"csrf_token": token, "product": "Brood"})
+    assert db.scalar(select(Job.id).where(Job.kind == service.HA_SYNC_JOB)) is not None
