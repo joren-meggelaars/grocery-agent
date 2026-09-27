@@ -24,7 +24,7 @@ def test_successful_login_sets_a_hardened_cookie(client):
     cookie = resp.headers["set-cookie"]
     assert cookie.startswith("__Host-session=")
     lowered = cookie.lower()
-    for flag in ("httponly", "secure", "samesite=strict", "path=/"):
+    for flag in ("httponly", "secure", "samesite=lax", "path=/"):
         assert flag in lowered
     assert "domain=" not in lowered
     assert "joren" in client.get("/").text

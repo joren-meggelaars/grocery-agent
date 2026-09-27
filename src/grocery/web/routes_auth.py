@@ -52,7 +52,11 @@ def _start_session(request: Request, db: Session, user: User, next_url: str) -> 
         max_age=settings.session_absolute_days * 86400,
         httponly=True,
         secure=settings.cookie_secure,
-        samesite="strict",
+        # Lax, not Strict: a sign-in through Authentik lands here by a cross-site redirect (Authentik -> here),
+        # and the very next same-site request (the redirect to `next_url` below) is still treated as part of
+        # that cross-site navigation by the browser. A Strict cookie set here would not be sent on it, so the
+        # freshly created session would look logged-out on the first page after signing in.
+        samesite="lax",
         path="/",
     )
     return response
@@ -197,7 +201,7 @@ def logout(
         path="/",
         secure=settings.cookie_secure,
         httponly=True,
-        samesite="strict",
+        samesite="lax",
     )
     return response
 
